@@ -1,0 +1,10 @@
+# Archives
+*.zip
+
+# Jan AI source (reference only, not part of this project)
+jan-main/
+
+# ContextSend build output
+contextsend/src-tauri/target/
+contextsend/node_modules/
+contextsend/dist/
