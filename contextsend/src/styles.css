@@ -1,23 +1,272 @@
-:root {
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    'Microsoft YaHei',
-    sans-serif;
-  color: #e6e6e6;
-  background-color: #1b1d22;
-  line-height: 1.5;
+/* ===== CSS 自定义属性（主题变量） ===== */
+
+/* 暗色主题（默认） */
+[data-theme='dark'] {
+  --bg-primary: #1b1d22;
+  --bg-secondary: #24272e;
+  --bg-tertiary: #2c2f37;
+  --text-primary: #e6e6e6;
+  --text-secondary: #9aa0aa;
+  --border: #30343c;
+  --danger: #ff7a7a;
+  --success: #7ad88a;
+  --warning: #f59e0b;
+  --shadow: rgba(0, 0, 0, 0.3);
 }
+
+/* 亮色主题 */
+[data-theme='light'] {
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e8e8e8;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --border: #d4d4d4;
+  --danger: #d32f2f;
+  --success: #388e3c;
+  --warning: #d97706;
+  --shadow: rgba(0, 0, 0, 0.08);
+}
+
+/* 主题色（由 JS 动态注入，此处为回退值） */
+:root {
+  --accent: #4c7cf3;
+  --accent-hover: #3a5fd9;
+}
+
+/* ===== 全局基础样式 ===== */
 
 * {
   box-sizing: border-box;
 }
 
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
 body {
   margin: 0;
+  overflow: hidden;
 }
 
 #app {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+}
+
+/* ===== 通用工具类 ===== */
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+.status-text {
+  color: var(--success);
+}
+
+/* ===== 通用组件样式 ===== */
+
+input,
+textarea,
+select {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 0.45rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: border-color 0.15s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+select {
+  cursor: pointer;
+}
+
+button {
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+button:hover {
+  background: var(--accent-hover);
+}
+
+button:active {
+  opacity: 0.85;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+button.ghost:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.small {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+button.danger:hover {
+  opacity: 0.85;
+}
+
+/* ===== Toggle 开关 ===== */
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle__slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toggle__slider::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle input:checked + .toggle__slider {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle__slider::before {
+  transform: translateX(18px);
+}
+
+/* ===== 权限等级徽章 ===== */
+
+.permission-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 10px;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.permission-badge.blocked {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.permission-badge.stranger {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.permission-badge.trusted {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.permission-badge.sync {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ===== 在线状态圆点 ===== */
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dot.online {
+  background: var(--success);
+}
+
+/* ===== 主题色方块 ===== */
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ===== 错误/状态横幅 ===== */
+
+.banner {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+}
+
+.banner--error {
+  background: rgba(255, 122, 122, 0.12);
+  color: var(--danger);
+}
+
+.banner--status {
+  background: rgba(122, 216, 138, 0.12);
+  color: var(--success);
 }

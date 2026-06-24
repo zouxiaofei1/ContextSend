@@ -19,6 +19,8 @@ pub struct AppState {
     pub identity_path: std::path::PathBuf,
     /// 本机身份（可改名）。
     pub identity: Mutex<DeviceIdentity>,
+    /// 关闭窗口时是否最小化到托盘（默认 true）。
+    pub minimize_to_tray: Mutex<bool>,
 }
 
 /// 返回给前端的应用基础信息。
@@ -134,4 +136,10 @@ pub fn import_openai(json: String) -> Result<Conversation, String> {
 #[tauri::command]
 pub fn export_openai(conversation: Conversation) -> Result<String, String> {
     export_openai_json(&conversation).map_err(|e| e.to_string())
+}
+
+/// 设置关闭窗口时是否最小化到托盘。
+#[tauri::command]
+pub fn set_minimize_to_tray(state: State<'_, AppState>, enabled: bool) {
+    *state.minimize_to_tray.lock().unwrap() = enabled;
 }
