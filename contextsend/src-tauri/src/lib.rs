@@ -18,6 +18,7 @@ use tokio::sync::OnceCell;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None::<Vec<&str>>,
@@ -26,7 +27,12 @@ pub fn run() {
             tray::setup_tray(app)?;
 
             // 身份持久化到 app 数据目录。
-            let dir = app.path().app_data_dir()?;
+            // 调试用：设置 CONTEXTSEND_DATA_DIR 可覆盖数据目录，便于同机开多个实例
+            // （不同目录 → 不同 identity.json → 不同 UUID → 能互相发现/配对）。
+            let dir = match std::env::var_os("CONTEXTSEND_DATA_DIR") {
+                Some(custom) => std::path::PathBuf::from(custom),
+                None => app.path().app_data_dir()?,
+            };
             std::fs::create_dir_all(&dir)?;
             let identity_path = dir.join("identity.json");
             let identity = DeviceIdentity::load_or_create(&identity_path)?;

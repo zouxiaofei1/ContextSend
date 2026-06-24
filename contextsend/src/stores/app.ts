@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { load, type Store } from '@tauri-apps/plugin-store'
 
 /** 与 Rust 端 `commands::AppInfo` 对应的应用信息。 */
 export interface AppInfo {
@@ -35,6 +36,21 @@ export interface Conversation {
   title?: string
   model?: string
   messages: ChatMessage[]
+}
+
+/**
+ * 接收页中的一段对话上下文：包裹一份 {@link Conversation}，附带来源、时间与已读状态。
+ * 多段对话以 {@link ConversationSegment} 列表形式保存并持久化到磁盘。
+ */
+export interface ConversationSegment {
+  id: string
+  /** 来源设备名；本地导入用 i18n 文案占位。 */
+  fromName: string
+  /** 接收/导入时间戳（毫秒）。 */
+  receivedAt: number
+  /** 已读 / 未读 —— 接收页分组与折叠的依据。 */
+  read: boolean
+  conversation: Conversation
 }
 
 /** 待用户确认的入站配对。 */
@@ -74,10 +90,51 @@ export const useAppStore = defineStore('app', () => {
   const devices = ref<Device[]>([])
   const incoming = ref<IncomingPairing | null>(null)
   const outgoing = ref<OutgoingPairing | null>(null)
-  const received = ref<{ fromName: string; conversation: Conversation } | null>(null)
+  /** 已接收 / 导入的多段对话（最新在前），持久化到磁盘。 */
+  const segments = ref<ConversationSegment[]>([])
+  /** 配对推送时选用的段 id（默认最新段）。 */
+  const selectedSegmentId = ref<string | null>(null)
   const status = ref<string>('')
   const error = ref<string | null>(null)
   const loading = ref(false)
+
+  // ---- 持久化（Tauri plugin-store，磁盘 JSON） ----
+  const STORE_FILE = 'segments.json'
+  const STORE_KEY = 'segments'
+  let store: Store | null = null
+
+  /** 简易 UUID（优先 crypto.randomUUID，回退到时间戳+随机）。 */
+  function newId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID()
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+
+  /** 把当前 segments 落盘（异步，失败仅记录不阻断 UI）。 */
+  async function persistSegments(): Promise<void> {
+    try {
+      if (!store) store = await load(STORE_FILE, { defaults: {}, autoSave: false })
+      await store.set(STORE_KEY, segments.value)
+      await store.save()
+    } catch (e) {
+      console.error('持久化对话失败:', e)
+    }
+  }
+
+  /** 从磁盘恢复 segments。 */
+  async function loadSegments(): Promise<void> {
+    try {
+      if (!store) store = await load(STORE_FILE, { defaults: {}, autoSave: false })
+      const saved = await store.get<ConversationSegment[]>(STORE_KEY)
+      if (Array.isArray(saved)) {
+        segments.value = saved
+        selectedSegmentId.value = saved[0]?.id ?? null
+      }
+    } catch (e) {
+      console.error('恢复对话失败:', e)
+    }
+  }
 
   /** 初始化：拉取应用信息、身份、设备列表，并订阅后端事件。 */
   async function init(): Promise<void> {
@@ -86,6 +143,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       // 先订阅事件，避免错过网络就绪后立即发现的设备；三个独立查询并行拉取。
       await subscribe()
+      await loadSegments()
       const [appInfo, self, devs] = await Promise.all([
         invoke<AppInfo>('get_app_info'),
         invoke<SelfIdentity>('get_self_identity'),
@@ -138,7 +196,7 @@ export const useAppStore = defineStore('app', () => {
           }
           break
         case 'conversationReceived':
-          received.value = { fromName: p.fromName, conversation: p.conversation }
+          addSegment(p.fromName, p.conversation, false)
           status.value = `收到来自「${p.fromName}」的 ${p.conversation.messages.length} 条消息`
           break
         case 'failed':
@@ -198,13 +256,73 @@ export const useAppStore = defineStore('app', () => {
     return await invoke<string>('export_openai', { conversation })
   }
 
+  // ---- 段管理 ----
+
+  /** 新增一段对话（最新在前），并落盘。返回新段 id。 */
+  function addSegment(fromName: string, conversation: Conversation, read: boolean): string {
+    const seg: ConversationSegment = {
+      id: newId(),
+      fromName,
+      receivedAt: Date.now(),
+      read,
+      conversation,
+    }
+    segments.value.unshift(seg)
+    if (!selectedSegmentId.value) selectedSegmentId.value = seg.id
+    void persistSegments()
+    return seg.id
+  }
+
+  /** 标记某段为已读。 */
+  function markRead(id: string): void {
+    const seg = segments.value.find((s) => s.id === id)
+    if (seg && !seg.read) {
+      seg.read = true
+      void persistSegments()
+    }
+  }
+
+  /** 全部标记为已读。 */
+  function markAllRead(): void {
+    let changed = false
+    for (const s of segments.value) {
+      if (!s.read) {
+        s.read = true
+        changed = true
+      }
+    }
+    if (changed) void persistSegments()
+  }
+
+  /** 删除一段对话。 */
+  function removeSegment(id: string): void {
+    segments.value = segments.value.filter((s) => s.id !== id)
+    if (selectedSegmentId.value === id) {
+      selectedSegmentId.value = segments.value[0]?.id ?? null
+    }
+    void persistSegments()
+  }
+
+  /** 清空所有段。 */
+  function clearSegments(): void {
+    segments.value = []
+    selectedSegmentId.value = null
+    void persistSegments()
+  }
+
+  /** 选定用于推送的段。 */
+  function selectSegment(id: string): void {
+    selectedSegmentId.value = id
+  }
+
   return {
     info,
     identity,
     devices,
     incoming,
     outgoing,
-    received,
+    segments,
+    selectedSegmentId,
     status,
     error,
     loading,
@@ -216,5 +334,11 @@ export const useAppStore = defineStore('app', () => {
     rejectIncoming,
     importOpenai,
     exportOpenai,
+    addSegment,
+    markRead,
+    markAllRead,
+    removeSegment,
+    clearSegments,
+    selectSegment,
   }
 })

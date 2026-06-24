@@ -76,15 +76,19 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
           <span>{{ t('settings.accentColor') }}</span>
         </div>
         <div class="setting-row__control">
-          <button
-            v-for="color in ACCENT_COLORS"
-            :key="color.hex"
-            class="color-swatch"
-            :class="{ active: settings.accentColor === color.hex }"
-            :style="{ background: color.hex }"
-            :title="color.name"
-            @click="onColorSelect(color.hex)"
-          />
+          <select
+            class="accent-color-select"
+            :value="settings.accentColor"
+            @change="onColorSelect(($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="color in ACCENT_COLORS"
+              :key="color.hex"
+              :value="color.hex"
+            >
+              {{ color.name }}
+            </option>
+          </select>
         </div>
       </div>
 
@@ -261,6 +265,11 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
   min-width: 120px;
 }
 
+.accent-color-select {
+  width: auto;
+  min-width: 160px;
+}
+
 .rename-control {
   display: flex;
   gap: 0.5rem;
@@ -268,10 +277,5 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
 
 .rename-input {
   width: 160px;
-}
-
-/* 颜色色块容器 */
-.setting-row__control .color-swatch + .color-swatch {
-  margin-left: 0;
 }
 </style>

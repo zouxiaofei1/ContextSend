@@ -1,62 +1,72 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useAppStore, type Conversation } from '../stores/app'
+import { useAppStore, type ConversationSegment } from '../stores/app'
 import { useI18n } from 'vue-i18n'
+import MarkdownContent from './MarkdownContent.vue'
 
 const app = useAppStore()
 const { t } = useI18n()
 
-const currentConversation = ref<Conversation>({
-  title: '示例对话',
-  model: 'gpt-4o',
-  messages: [
-    { role: 'system', content: '你是一个有用的助手。' },
-    { role: 'user', content: '你好，帮我介绍下自己。' },
-    { role: 'assistant', content: '我是本地 Chat AI 助手。' },
-    { role: 'user', content: '今天天气怎么样？' },
-    { role: 'assistant', content: '我无法获取实时天气，但可以帮你查询方法。' },
-  ],
-})
-
 const importText = ref('')
 const exportText = ref('')
-const expandedMessages = ref<Set<number>>(new Set())
 
+/** 已展开的段 id 集合。 */
+const expandedSegments = ref<Set<string>>(new Set())
+/** 分组折叠状态（默认未读展开、已读收起）。 */
+const groupCollapsed = ref<{ unread: boolean; read: boolean }>({ unread: false, read: true })
 /** 导入/导出区域是否展开 */
 const showImportExport = ref(false)
 
-const messageCount = computed(() => currentConversation.value.messages.length)
+const unreadSegments = computed(() => app.segments.filter((s) => !s.read))
+const readSegments = computed(() => app.segments.filter((s) => s.read))
 
-function preview(content: unknown): string {
-  if (typeof content === 'string') return content
-  return '[多模态内容]'
+function segTitle(s: ConversationSegment): string {
+  return s.conversation.title || s.conversation.model || t('receive.title')
 }
 
-function toggleMessage(idx: number): void {
-  if (expandedMessages.value.has(idx)) {
-    expandedMessages.value.delete(idx)
+function fmtTime(ts: number): string {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function toggleSegment(s: ConversationSegment): void {
+  if (expandedSegments.value.has(s.id)) {
+    expandedSegments.value.delete(s.id)
   } else {
-    expandedMessages.value.add(idx)
+    expandedSegments.value.add(s.id)
+    // 展开未读段即标记为已读（自动归入已读组）
+    if (!s.read) app.markRead(s.id)
   }
 }
 
-function isExpanded(idx: number): boolean {
-  return expandedMessages.value.has(idx)
+function isExpanded(id: string): boolean {
+  return expandedSegments.value.has(id)
+}
+
+function onClear(): void {
+  if (confirm(t('receive.confirmClear'))) {
+    app.clearSegments()
+    expandedSegments.value.clear()
+  }
 }
 
 async function onImport(): Promise<void> {
   try {
-    currentConversation.value = await app.importOpenai(importText.value)
-    expandedMessages.value.clear()
-    app.status = t('receive.importSuccess', { count: currentConversation.value.messages.length })
+    const conv = await app.importOpenai(importText.value)
+    app.addSegment(t('receive.localImport'), conv, true)
+    importText.value = ''
+    app.status = t('receive.importSuccess', { count: conv.messages.length })
   } catch (e) {
     app.error = String(e)
   }
 }
 
 async function onExport(): Promise<void> {
+  const seg = app.segments.find((s) => s.id === app.selectedSegmentId) ?? app.segments[0]
+  if (!seg) return
   try {
-    exportText.value = await app.exportOpenai(currentConversation.value)
+    exportText.value = await app.exportOpenai(seg.conversation)
     app.status = t('receive.exportReady')
   } catch (e) {
     app.error = String(e)
@@ -70,40 +80,73 @@ async function onExport(): Promise<void> {
     <div v-if="app.error" class="banner banner--error">{{ app.error }}</div>
     <div v-if="app.status" class="banner banner--status">{{ app.status }}</div>
 
-    <!-- 接收到的对话通知 -->
-    <div v-if="app.received" class="card card--accent">
-      <h3>
-        {{ t('receive.received', { name: app.received.fromName, count: app.received.conversation.messages.length }) }}
-      </h3>
-      <button class="small" @click="currentConversation = app.received!.conversation; app.received = null">
-        {{ t('receive.title') }} →
-      </button>
+    <!-- 顶部操作条 -->
+    <div class="toolbar">
+      <h2>{{ t('receive.title') }}</h2>
+      <div class="toolbar__actions" v-if="app.segments.length">
+        <button class="small ghost" @click="app.markAllRead()">{{ t('receive.markAllRead') }}</button>
+        <button class="small ghost" @click="onClear()">{{ t('receive.clear') }}</button>
+      </div>
     </div>
 
-    <!-- 当前对话 -->
-    <section class="card">
-      <div class="card__header">
-        <h2>{{ t('receive.title') }}</h2>
-        <span class="muted">{{ t('receive.count', { count: messageCount }) }}</span>
-      </div>
+    <p v-if="app.segments.length === 0" class="muted empty">{{ t('receive.emptySegments') }}</p>
 
-      <ul v-if="messageCount > 0" class="msg-list">
-        <li
-          v-for="(m, i) in currentConversation.messages"
-          :key="i"
-          class="msg-item"
-          @click="toggleMessage(i)"
-        >
-          <div class="msg-item__header">
-            <b class="msg-role">{{ m.role }}</b>
-            <span class="msg-toggle muted">{{ isExpanded(i) ? '▲' : '▼' }}</span>
+    <!-- 未读分组 -->
+    <section v-if="unreadSegments.length" class="card">
+      <button class="ghost section-toggle" @click="groupCollapsed.unread = !groupCollapsed.unread">
+        {{ groupCollapsed.unread ? '▶' : '▼' }} {{ t('receive.unread') }} ({{ unreadSegments.length }})
+      </button>
+      <ul v-show="!groupCollapsed.unread" class="seg-list">
+        <li v-for="s in unreadSegments" :key="s.id" class="seg-item seg-item--unread">
+          <div class="seg-head" @click="toggleSegment(s)">
+            <span class="seg-toggle muted">{{ isExpanded(s.id) ? '▲' : '▼' }}</span>
+            <span class="seg-title">{{ segTitle(s) }}</span>
+            <span class="seg-meta muted">
+              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} · {{ t('receive.count', { count: s.conversation.messages.length }) }}
+            </span>
+            <span class="dot-new" />
           </div>
-          <div class="msg-content" :class="{ 'msg-content--collapsed': !isExpanded(i) }">
-            {{ preview(m.content) }}
+          <div v-if="isExpanded(s.id)" class="seg-body">
+            <div v-for="(m, i) in s.conversation.messages" :key="i" class="msg">
+              <b class="msg-role">{{ m.role }}</b>
+              <MarkdownContent :content="m.content" />
+            </div>
+            <div class="seg-actions">
+              <button class="small ghost" @click="app.selectSegment(s.id)">{{ t('receive.setPushSource') }}</button>
+              <button class="small ghost danger" @click="app.removeSegment(s.id)">{{ t('receive.delete') }}</button>
+            </div>
           </div>
         </li>
       </ul>
-      <p v-else class="muted">{{ t('receive.noMessages') }}</p>
+    </section>
+
+    <!-- 已读分组 -->
+    <section v-if="readSegments.length" class="card">
+      <button class="ghost section-toggle" @click="groupCollapsed.read = !groupCollapsed.read">
+        {{ groupCollapsed.read ? '▶' : '▼' }} {{ t('receive.read') }} ({{ readSegments.length }})
+      </button>
+      <ul v-show="!groupCollapsed.read" class="seg-list">
+        <li v-for="s in readSegments" :key="s.id" class="seg-item">
+          <div class="seg-head" @click="toggleSegment(s)">
+            <span class="seg-toggle muted">{{ isExpanded(s.id) ? '▲' : '▼' }}</span>
+            <span class="seg-title">{{ segTitle(s) }}</span>
+            <span class="seg-meta muted">
+              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} · {{ t('receive.count', { count: s.conversation.messages.length }) }}
+            </span>
+            <span v-if="s.id === app.selectedSegmentId" class="push-badge">{{ t('receive.pushSource') }}</span>
+          </div>
+          <div v-if="isExpanded(s.id)" class="seg-body">
+            <div v-for="(m, i) in s.conversation.messages" :key="i" class="msg">
+              <b class="msg-role">{{ m.role }}</b>
+              <MarkdownContent :content="m.content" />
+            </div>
+            <div class="seg-actions">
+              <button class="small ghost" @click="app.selectSegment(s.id)">{{ t('receive.setPushSource') }}</button>
+              <button class="small ghost danger" @click="app.removeSegment(s.id)">{{ t('receive.delete') }}</button>
+            </div>
+          </div>
+        </li>
+      </ul>
     </section>
 
     <!-- 导入导出的折叠区 -->
@@ -142,33 +185,34 @@ async function onExport(): Promise<void> {
   overflow-y: auto;
 }
 
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.toolbar h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.toolbar__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.empty {
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
 .card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem 1.25rem;
   margin-bottom: 1rem;
-}
-
-.card--accent {
-  border-color: var(--accent);
-}
-
-.card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 0.5rem;
-}
-
-.card h2 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.card h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
 }
 
 .row {
@@ -194,52 +238,96 @@ async function onExport(): Promise<void> {
   background: transparent;
 }
 
-/* 消息列表 */
-.msg-list {
-  margin: 0;
+/* 段列表 */
+.seg-list {
+  margin: 0.5rem 0 0;
   padding-left: 0;
   list-style: none;
 }
 
-.msg-item {
-  padding: 0.35rem 0;
+.seg-item {
   border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.1s;
 }
 
-.msg-item:hover {
-  background: var(--bg-tertiary);
+.seg-item:last-child {
+  border-bottom: none;
 }
 
-.msg-item__header {
+.seg-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  cursor: pointer;
+}
+
+.seg-head:hover {
+  color: var(--accent);
+}
+
+.seg-toggle {
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.seg-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seg-meta {
+  font-size: 0.75rem;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dot-new {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.push-badge {
+  font-size: 0.65rem;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  flex-shrink: 0;
+}
+
+/* 段展开后的消息体 */
+.seg-body {
+  padding: 0.25rem 0 0.75rem;
+}
+
+.msg {
+  padding: 0.5rem 0;
+  border-top: 1px dashed var(--border);
 }
 
 .msg-role {
-  font-size: 0.85rem;
+  display: block;
+  font-size: 0.78rem;
   color: var(--accent);
   text-transform: uppercase;
+  margin-bottom: 0.25rem;
 }
 
-.msg-toggle {
-  font-size: 0.65rem;
+.seg-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.msg-content {
-  font-size: 0.9rem;
-  padding-top: 0.15rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.msg-content--collapsed {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
+.danger:hover {
+  color: #e5534b;
 }
 
 textarea {

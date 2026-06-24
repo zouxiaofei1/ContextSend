@@ -7,16 +7,21 @@ import { useI18n } from 'vue-i18n'
 const app = useAppStore()
 const { t } = useI18n()
 
-/** 示例对话（即将以当前对话替代） */
-const currentConversation: Conversation = {
-  title: '示例对话',
-  model: 'gpt-4o',
-  messages: [
-    { role: 'system', content: '你是一个有用的助手。' },
-    { role: 'user', content: '你好，帮我介绍下自己。' },
-    { role: 'assistant', content: '我是本地 Chat AI 助手。' },
-  ],
-}
+/** 推送源：接收页选定的段，回退到最新段，再回退到示例对话。 */
+const pushConversation = computed<Conversation>(() => {
+  const seg =
+    app.segments.find((s) => s.id === app.selectedSegmentId) ?? app.segments[0]
+  if (seg) return seg.conversation
+  return {
+    title: '示例对话',
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: '你是一个有用的助手。' },
+      { role: 'user', content: '你好，帮我介绍下自己。' },
+      { role: 'assistant', content: '我是本地 Chat AI 助手。' },
+    ],
+  }
+})
 
 const onlineDevices = computed(() => app.devices.filter((d) => d.online))
 const offlineDevices = computed(() => app.devices.filter((d) => !d.online))
@@ -34,7 +39,7 @@ const offlineDevices = computed(() => app.devices.filter((d) => !d.online))
       <p class="pin">{{ app.outgoing.pin }}</p>
       <p class="muted">{{ t('device.pairingHint') }}</p>
       <div class="row">
-        <button @click="app.confirmAndPush(currentConversation)">
+        <button @click="app.confirmAndPush(pushConversation)">
           {{ t('device.pairingConfirm') }}
         </button>
         <button class="ghost" @click="app.outgoing = null">{{ t('device.cancel') }}</button>

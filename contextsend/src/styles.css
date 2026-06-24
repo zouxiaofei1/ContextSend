@@ -233,24 +233,21 @@ button.danger:hover {
   background: var(--success);
 }
 
-/* ===== 主题色方块 ===== */
+/* ===== 主题色下拉框 ===== */
 
-.color-swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid transparent;
+.accent-color-select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
 }
 
-.color-swatch:hover {
-  transform: scale(1.15);
-}
-
-.color-swatch.active {
-  border-color: var(--text-primary);
-  box-shadow: 0 0 0 2px var(--accent);
+.accent-color-select:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 /* ===== 滚动条（现代主题色风格） ===== */

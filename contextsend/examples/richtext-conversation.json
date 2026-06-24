@@ -1,0 +1,42 @@
+{
+  "title": "富文本渲染演示",
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是一个**资深 Rust 工程师**，回答时使用 Markdown 排版：代码用围栏代码块，并配合表格与列表说明。"
+    },
+    {
+      "role": "user",
+      "content": "帮我写一个快速排序，并解释一下时间复杂度。"
+    },
+    {
+      "role": "assistant",
+      "content": "## 快速排序（Quicksort）\n\n下面是一个 Rust 实现，采用 **Lomuto 分区**：\n\n```rust\nfn quicksort<T: Ord + Copy>(arr: &mut [T]) {\n    if arr.len() <= 1 {\n        return;\n    }\n    let pivot = partition(arr);\n    let (left, right) = arr.split_at_mut(pivot);\n    quicksort(left);\n    quicksort(&mut right[1..]);\n}\n\nfn partition<T: Ord + Copy>(arr: &mut [T]) -> usize {\n    let pivot = arr[arr.len() - 1];\n    let mut i = 0;\n    for j in 0..arr.len() - 1 {\n        if arr[j] <= pivot {\n            arr.swap(i, j);\n            i += 1;\n        }\n    }\n    arr.swap(i, arr.len() - 1);\n    i\n}\n```\n\n### 时间复杂度\n\n| 场景 | 复杂度 | 说明 |\n| --- | --- | --- |\n| 最好 / 平均 | `O(n log n)` | 每次分区大致均分 |\n| 最坏 | `O(n²)` | 已排序且 pivot 取端点 |\n| 空间 | `O(log n)` | 递归栈深度 |\n\n> **提示**：随机化 pivot 或三数取中可以让最坏情况在实践中几乎不发生。\n\n要点回顾：\n\n1. 选定 *pivot*\n2. 分区使左侧 ≤ pivot ≤ 右侧\n3. 对两侧递归\n\n更多细节见 [Rust 官方文档](https://doc.rust-lang.org/std/)。"
+    },
+    {
+      "role": "user",
+      "content": "这张架构图里画的是什么？"
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "请描述这张图，并指出 `client` 与 `server` 之间用的是什么协议。"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Client-server-model.svg/512px-Client-server-model.svg.png",
+            "detail": "high"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "这是一张经典的 **客户端 / 服务器（Client–Server）** 模型图：\n\n- 多个 `client` 通过网络向中心化的 `server` 发起请求\n- `server` 处理请求后返回响应\n\n常见传输协议：\n\n```text\nHTTP / HTTPS  —— Web 应用\nWebSocket     —— 实时双向通信\ngRPC          —— 服务间高性能 RPC\n```\n\n在本项目（ContextSend）中，设备发现走 **mDNS**，配对与对话推送走局域网内的点对点连接。"
+    }
+  ]
+}
