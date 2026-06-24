@@ -16,14 +16,14 @@
         "title": "ContextSend 上下文分享",
         "width": 960,
         "height": 680,
-        "minWidth": 780,
+        "minWidth": 300,
         "minHeight": 500,
         "resizable": true,
-        "visible": true
+        "visible": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {

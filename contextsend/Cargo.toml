@@ -37,10 +37,27 @@ aes-gcm = "0.10"
 hkdf = "0.12"
 sha2 = "0.10"
 
+# 开发迭代：优先编译/链接速度。
+[profile.dev]
+# full debuginfo 在 Windows 上拖慢链接；行号表足够日常调试与 panic 定位。
+debug = "line-tables-only"
+
+# 依赖只编译一次即缓存复用，给它们开 opt-level 不影响日常增量编译，
+# 却能让 tauri dev 下的 app 运行更顺（仅首次 / 依赖更新时的 clean build 略慢）。
+[profile.dev.package."*"]
+opt-level = 2
+
 [profile.release]
-# 体积优先（目标安装包 <30MB）
+# 体积优先（目标安装包 <30MB）—— 正式发布用，编译最慢。
 opt-level = "s"
 lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
+
+# 本地打包验证用：thin LTO + 多 codegen-units，编译快得多，体积略大于正式包。
+# 用法：tauri build --profile release-fast
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16

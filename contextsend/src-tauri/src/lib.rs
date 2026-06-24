@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use commands::AppState;
 use cs_network::{DeviceIdentity, NetworkService};
 use tauri::{Emitter, Manager, WindowEvent};
+use tokio::sync::OnceCell;
 
 /// 应用主入口，由 `main.rs`（桌面）调用。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -30,23 +31,34 @@ pub fn run() {
             let identity_path = dir.join("identity.json");
             let identity = DeviceIdentity::load_or_create(&identity_path)?;
 
-            // 启动网络服务（异步），并把事件转发到前端。
-            let (service, mut events_rx) =
-                tauri::async_runtime::block_on(NetworkService::start(identity.clone()))
-                    .map_err(|e| std::io::Error::other(e.to_string()))?;
-
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                while let Some(event) = events_rx.recv().await {
-                    let _ = handle.emit("net-event", event);
-                }
+            // 先注册状态（网络服务尚未就绪），让窗口与前端不被网络初始化阻塞。
+            app.manage(AppState {
+                service: OnceCell::new(),
+                identity_path,
+                identity: Mutex::new(identity.clone()),
+                minimize_to_tray: Mutex::new(true),
             });
 
-            app.manage(AppState {
-                service,
-                identity_path,
-                identity: Mutex::new(identity),
-                minimize_to_tray: Mutex::new(true),
+            // 后台异步启动网络服务：就绪后填充 service 并广播事件，
+            // 避免 mDNS 初始化阻塞 setup（首屏可立即呈现）。
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match NetworkService::start(identity).await {
+                    Ok((service, mut events_rx)) => {
+                        // 转发网络事件到前端。
+                        let emit_handle = handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            while let Some(event) = events_rx.recv().await {
+                                let _ = emit_handle.emit("net-event", event);
+                            }
+                        });
+                        let _ = handle.state::<AppState>().service.set(service);
+                        let _ = handle.emit("net-ready", ());
+                    }
+                    Err(e) => {
+                        let _ = handle.emit("net-error", e.to_string());
+                    }
+                }
             });
 
             // 拦截窗口关闭事件：若 minimize_to_tray 为 true 则隐藏到托盘

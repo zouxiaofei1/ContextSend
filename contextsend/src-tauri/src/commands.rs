@@ -13,14 +13,24 @@ use tauri::State;
 
 /// 应用级共享状态（注入到 Tauri `State`）。
 pub struct AppState {
-    /// 网络服务句柄（启动成功后存在）。
-    pub service: NetworkService,
+    /// 网络服务句柄（后台异步启动，就绪后填充）。
+    pub service: tokio::sync::OnceCell<NetworkService>,
     /// 本机身份持久化文件路径。
     pub identity_path: std::path::PathBuf,
     /// 本机身份（可改名）。
     pub identity: Mutex<DeviceIdentity>,
     /// 关闭窗口时是否最小化到托盘（默认 true）。
     pub minimize_to_tray: Mutex<bool>,
+}
+
+impl AppState {
+    /// 取已就绪的网络服务克隆（句柄内部 `Arc`，克隆廉价）；未就绪时返回友好错误。
+    fn service(&self) -> Result<NetworkService, String> {
+        self.service
+            .get()
+            .cloned()
+            .ok_or_else(|| "网络服务尚未就绪，请稍候".to_string())
+    }
 }
 
 /// 返回给前端的应用基础信息。
@@ -72,7 +82,11 @@ pub fn rename_self(state: State<'_, AppState>, new_name: String) -> Result<(), S
 /// 当前设备列表快照。
 #[tauri::command]
 pub fn list_devices(state: State<'_, AppState>) -> Vec<Device> {
-    state.service.list_devices()
+    state
+        .service
+        .get()
+        .map(|s| s.list_devices())
+        .unwrap_or_default()
 }
 
 /// 配对发起结果。
@@ -89,7 +103,7 @@ pub async fn connect_pair(
     target_uuid: String,
 ) -> Result<PairingStarted, String> {
     let (pairing_id, pin) = state
-        .service
+        .service()?
         .connect_pair(&target_uuid)
         .await
         .map_err(|e| e.to_string())?;
@@ -104,7 +118,7 @@ pub async fn push_conversation(
     conversation: Conversation,
 ) -> Result<(), String> {
     state
-        .service
+        .service()?
         .push(pairing_id, &conversation)
         .await
         .map_err(|e| e.to_string())
@@ -114,7 +128,7 @@ pub async fn push_conversation(
 #[tauri::command]
 pub async fn accept_incoming(state: State<'_, AppState>, pairing_id: u64) -> Result<(), String> {
     state
-        .service
+        .service()?
         .accept_incoming(pairing_id)
         .await
         .map_err(|e| e.to_string())
@@ -123,7 +137,9 @@ pub async fn accept_incoming(state: State<'_, AppState>, pairing_id: u64) -> Res
 /// 拒绝/取消一个待确认配对。
 #[tauri::command]
 pub fn reject_pairing(state: State<'_, AppState>, pairing_id: u64) {
-    state.service.reject(pairing_id);
+    if let Some(s) = state.service.get() {
+        s.reject(pairing_id);
+    }
 }
 
 /// 解析一段 OpenAI Compatible JSON 文本为内部对话结构。

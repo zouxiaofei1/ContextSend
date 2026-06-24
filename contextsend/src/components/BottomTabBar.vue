@@ -89,6 +89,10 @@ const navItems = [
   display: block;
 }
 
+.bottom-bar__icon :deep(svg path) {
+  fill: currentColor;
+}
+
 .bottom-bar__label {
   line-height: 1;
 }

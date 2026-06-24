@@ -84,10 +84,16 @@ export const useAppStore = defineStore('app', () => {
     loading.value = true
     error.value = null
     try {
-      info.value = await invoke<AppInfo>('get_app_info')
-      identity.value = await invoke<SelfIdentity>('get_self_identity')
-      devices.value = await invoke<Device[]>('list_devices')
+      // 先订阅事件，避免错过网络就绪后立即发现的设备；三个独立查询并行拉取。
       await subscribe()
+      const [appInfo, self, devs] = await Promise.all([
+        invoke<AppInfo>('get_app_info'),
+        invoke<SelfIdentity>('get_self_identity'),
+        invoke<Device[]>('list_devices'),
+      ])
+      info.value = appInfo
+      identity.value = self
+      devices.value = devs
     } catch (e) {
       error.value = String(e)
     } finally {
@@ -95,8 +101,21 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** 订阅后端 `net-event`，把设备/配对/接收事件落到 store。 */
+  /** 重新拉取设备列表快照（权威覆盖）。 */
+  async function refreshDevices(): Promise<void> {
+    try {
+      devices.value = await invoke<Device[]>('list_devices')
+    } catch {
+      /* 网络尚未就绪时忽略 */
+    }
+  }
+
+  /** 订阅后端 `net-event`，把设备/配对/接收事件落到 store；并在网络就绪后刷新设备列表。 */
   async function subscribe(): Promise<void> {
+    // 网络服务后台异步启动，就绪后补拉一次权威设备快照（消除启动竞态）。
+    await listen('net-ready', () => {
+      void refreshDevices()
+    })
     await listen<NetEvent>('net-event', (event) => {
       const p = event.payload
       switch (p.type) {

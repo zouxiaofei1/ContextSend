@@ -50,7 +50,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       <!-- 主题：亮/暗 -->
       <div class="setting-row">
         <div class="setting-row__label">
-          <span class="setting-icon">🌓</span>
           <span>{{ t('settings.theme.label') }}</span>
         </div>
         <div class="setting-row__control">
@@ -74,7 +73,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       <!-- 主题色选择 -->
       <div class="setting-row">
         <div class="setting-row__label">
-          <span class="setting-icon">🎨</span>
           <span>{{ t('settings.accentColor') }}</span>
         </div>
         <div class="setting-row__control">
@@ -93,7 +91,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       <!-- 语言切换 -->
       <div class="setting-row">
         <div class="setting-row__label">
-          <span class="setting-icon">🌐</span>
           <span>{{ t('settings.language') }}</span>
         </div>
         <div class="setting-row__control">
@@ -116,7 +113,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       <!-- 关闭时最小化到托盘 -->
       <div class="setting-row">
         <div class="setting-row__label">
-          <span class="setting-icon">📌</span>
           <span>{{ t('settings.minimizeToTray') }}</span>
         </div>
         <div class="setting-row__control">
@@ -134,7 +130,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       <!-- 开机自启 -->
       <div class="setting-row">
         <div class="setting-row__label">
-          <span class="setting-icon">🚀</span>
           <span>{{ t('settings.autoStart') }}</span>
         </div>
         <div class="setting-row__control">
@@ -152,7 +147,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       <!-- 本机改名 -->
       <div class="setting-row">
         <div class="setting-row__label">
-          <span class="setting-icon">✏️</span>
           <span>{{ t('settings.rename') }}</span>
         </div>
         <div class="setting-row__control rename-control">
@@ -209,7 +203,9 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
   flex: 1;
   padding: 1.5rem 2rem;
   overflow-y: auto;
-  max-width: 600px;
+
+  width: 100%;
+  align-self: center;
 }
 
 .settings-section {
@@ -241,13 +237,6 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
   align-items: center;
   gap: 0.6rem;
   font-size: 0.9rem;
-}
-
-.setting-icon {
-  font-size: 1.1rem;
-  width: 1.3rem;
-  text-align: center;
-  flex-shrink: 0;
 }
 
 .setting-row__control {

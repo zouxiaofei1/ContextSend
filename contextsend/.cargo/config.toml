@@ -1,0 +1,18 @@
+# ContextSend 本地编译加速配置。
+#
+# 下面两块默认注释，按需安装工具后再启用——直接启用会因找不到可执行文件而构建失败。
+
+# ── 1) 更快的链接器（收益最大）─────────────────────────────
+# 链接是 Tauri 这类重依赖项目增量编译的最大瓶颈，Windows 默认 link.exe 很慢。
+# 安装 LLVM（含 lld-link）后取消下面两行注释：
+#   winget install LLVM.LLVM
+#
+# [target.x86_64-pc-windows-msvc]
+# linker = "lld-link.exe"
+
+# ── 2) 编译缓存 sccache（切分支 / clean build 收益大）──────────
+# 复用历史编译产物，避免重编依赖。安装后取消下面两行注释：
+#   cargo install sccache
+#
+# [build]
+# rustc-wrapper = "sccache"

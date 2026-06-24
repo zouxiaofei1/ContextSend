@@ -3,7 +3,7 @@
 
 # Jan AI source (reference only, not part of this project)
 jan-main/
-
+chatbox-extracted/
 # ContextSend build output
 # Cargo workspace 共享 target 位于 contextsend/target/
 contextsend/target/

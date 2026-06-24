@@ -253,6 +253,37 @@ button.danger:hover {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+/* ===== 滚动条（现代主题色风格） ===== */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+/* Chrome / Edge / Safari */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ===== 错误/状态横幅 ===== */
 
 .banner {

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { useAppStore } from '../stores/app'
 import { useI18n } from 'vue-i18n'
+import iconReceive from '../assets/icon-receive.svg?raw'
+import iconDevices from '../assets/icon-devices.svg?raw'
+import iconSettings from '../assets/icon-settings.svg?raw'
 
 defineProps<{
   activeTab: string
@@ -14,9 +17,9 @@ const app = useAppStore()
 const { t } = useI18n()
 
 const navItems = [
-  { id: 'receive', icon: '📥', label: t('sidebar.receive') },
-  { id: 'devices', icon: '🖥️', label: t('sidebar.devices') },
-  { id: 'settings', icon: '⚙️', label: t('sidebar.settings') },
+  { id: 'receive', icon: iconReceive, label: t('sidebar.receive') },
+  { id: 'devices', icon: iconDevices, label: t('sidebar.devices') },
+  { id: 'settings', icon: iconSettings, label: t('sidebar.settings') },
 ]
 </script>
 
@@ -37,7 +40,7 @@ const navItems = [
         :class="{ 'sidebar__nav-item--active': activeTab === item.id }"
         @click="emit('select', item.id)"
       >
-        <span class="sidebar__nav-icon">{{ item.icon }}</span>
+        <span class="sidebar__nav-icon" v-html="item.icon"></span>
         <span class="sidebar__nav-label">{{ item.label }}</span>
       </button>
     </nav>
@@ -116,9 +119,22 @@ const navItems = [
 }
 
 .sidebar__nav-icon {
-  font-size: 1.05rem;
   width: 1.5rem;
-  text-align: center;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sidebar__nav-icon :deep(svg) {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
+}
+
+.sidebar__nav-icon :deep(svg path) {
+  fill: currentColor;
 }
 
 .sidebar__footer {
