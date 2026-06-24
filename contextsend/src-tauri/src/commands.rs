@@ -1,21 +1,35 @@
-//! Tauri IPC command 骨架。
+//! Tauri IPC command 层。
 //!
-//! Phase 0 仅提供一个 [`get_app_info`]，用于验证「Vue(Pinia) → invoke → Rust」通信闭环。
+//! 把分层 crate 的能力暴露给前端：应用信息、本机身份、导入/导出，
+//! 以及网络层（设备列表、配对、推送、接收）。
 
+use std::sync::Mutex;
+
+use cs_core::openai::{export_openai_json, import_openai_json};
+use cs_core::Conversation;
+use cs_network::{Device, DeviceIdentity, NetworkService};
 use serde::Serialize;
+use tauri::State;
+
+/// 应用级共享状态（注入到 Tauri `State`）。
+pub struct AppState {
+    /// 网络服务句柄（启动成功后存在）。
+    pub service: NetworkService,
+    /// 本机身份持久化文件路径。
+    pub identity_path: std::path::PathBuf,
+    /// 本机身份（可改名）。
+    pub identity: Mutex<DeviceIdentity>,
+}
 
 /// 返回给前端的应用基础信息。
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
-    /// 应用版本（取自编译期 Cargo 版本）。
     pub version: String,
-    /// 运行平台标识（windows / macos / linux ...）。
     pub platform: String,
-    /// 内置适配器名称列表（来自 [`cs_adapters`]）。
     pub adapters: Vec<String>,
 }
 
-/// 获取应用信息。供前端挂载时调用，验证 IPC 通路。
+/// 获取应用信息。
 #[tauri::command]
 pub fn get_app_info() -> AppInfo {
     AppInfo {
@@ -26,4 +40,98 @@ pub fn get_app_info() -> AppInfo {
             .map(String::from)
             .collect(),
     }
+}
+
+/// 本机身份视图。
+#[derive(Debug, Serialize)]
+pub struct SelfIdentity {
+    pub uuid: String,
+    pub name: String,
+}
+
+/// 获取本机身份（UUID + 显示名）。
+#[tauri::command]
+pub fn get_self_identity(state: State<'_, AppState>) -> SelfIdentity {
+    let id = state.identity.lock().unwrap();
+    SelfIdentity {
+        uuid: id.uuid.clone(),
+        name: id.name.clone(),
+    }
+}
+
+/// 给本机改名并持久化。
+#[tauri::command]
+pub fn rename_self(state: State<'_, AppState>, new_name: String) -> Result<(), String> {
+    let mut id = state.identity.lock().unwrap();
+    id.rename(new_name, &state.identity_path)
+        .map_err(|e| e.to_string())
+}
+
+/// 当前设备列表快照。
+#[tauri::command]
+pub fn list_devices(state: State<'_, AppState>) -> Vec<Device> {
+    state.service.list_devices()
+}
+
+/// 配对发起结果。
+#[derive(Debug, Serialize)]
+pub struct PairingStarted {
+    pub pairing_id: u64,
+    pub pin: String,
+}
+
+/// 主动向目标设备发起配对，返回 6 位配对码供用户比对。
+#[tauri::command]
+pub async fn connect_pair(
+    state: State<'_, AppState>,
+    target_uuid: String,
+) -> Result<PairingStarted, String> {
+    let (pairing_id, pin) = state
+        .service
+        .connect_pair(&target_uuid)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(PairingStarted { pairing_id, pin })
+}
+
+/// 用户确认配对码一致后，推送一段对话。
+#[tauri::command]
+pub async fn push_conversation(
+    state: State<'_, AppState>,
+    pairing_id: u64,
+    conversation: Conversation,
+) -> Result<(), String> {
+    state
+        .service
+        .push(pairing_id, &conversation)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 用户确认入站配对码一致后，接收对端推送的对话（结果经 `net-event` 事件抛出）。
+#[tauri::command]
+pub async fn accept_incoming(state: State<'_, AppState>, pairing_id: u64) -> Result<(), String> {
+    state
+        .service
+        .accept_incoming(pairing_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 拒绝/取消一个待确认配对。
+#[tauri::command]
+pub fn reject_pairing(state: State<'_, AppState>, pairing_id: u64) {
+    state.service.reject(pairing_id);
+}
+
+/// 解析一段 OpenAI Compatible JSON 文本为内部对话结构。
+#[tauri::command]
+pub fn import_openai(json: String) -> Result<Conversation, String> {
+    import_openai_json(&json).map_err(|e| e.to_string())
+}
+
+/// 将一段对话导出为 OpenAI Compatible JSON 文本。
+#[tauri::command]
+pub fn export_openai(conversation: Conversation) -> Result<String, String> {
+    export_openai_json(&conversation).map_err(|e| e.to_string())
 }

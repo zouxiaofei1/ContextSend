@@ -13,3 +13,15 @@ cs-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+tokio.workspace = true
+mdns-sd.workspace = true
+uuid.workspace = true
+rand.workspace = true
+x25519-dalek = { workspace = true, features = ["static_secrets"] }
+aes-gcm.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "sync", "io-util", "macros", "time"] }
