@@ -5,6 +5,18 @@
 jan-main/
 
 # ContextSend build output
+# Cargo workspace 共享 target 位于 contextsend/target/
+contextsend/target/
 contextsend/src-tauri/target/
 contextsend/node_modules/
 contextsend/dist/
+
+# Tauri 生成的 schema（由构建再生）
+contextsend/src-tauri/gen/schemas/
+
+# TS 增量构建缓存
+contextsend/node_modules/.tmp/
+
+# 杂项
+.DS_Store
+Thumbs.db

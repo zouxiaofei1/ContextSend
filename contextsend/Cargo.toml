@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/adapters",
+    "crates/network",
+    "src-tauri",
+]
+
+# 各 crate 共享的元信息与依赖版本，统一在此处声明，子 crate 用 `.workspace = true` 引用。
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+license = "MIT"
+authors = ["ContextSend Contributors"]
+repository = "https://github.com/zouxiaofei/ContextSend"
+
+[workspace.dependencies]
+# 内部 crate
+cs-core = { path = "crates/core" }
+cs-adapters = { path = "crates/adapters" }
+cs-network = { path = "crates/network" }
+
+# 第三方
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[profile.release]
+# 体积优先（目标安装包 <30MB）
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

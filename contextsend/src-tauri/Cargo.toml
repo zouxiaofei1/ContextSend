@@ -1,0 +1,29 @@
+[package]
+name = "contextsend"
+description = "ContextSend：从本地 Chat AI 提取上下文并在局域网分享"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+default-run = "contextsend"
+
+# 同时产出 lib 与 bin：lib 供未来移动端 / 测试复用，bin 为桌面入口。
+[lib]
+name = "contextsend_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-fs = "2"
+serde.workspace = true
+serde_json.workspace = true
+
+# 内部分层 crate
+cs-core.workspace = true
+cs-adapters.workspace = true
+cs-network.workspace = true

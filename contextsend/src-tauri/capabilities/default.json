@@ -1,0 +1,35 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "ContextSend 默认权限。包含窗口/事件等核心能力；文件系统仅授予【只读】，且作用域严格限定到首批适配器(ChatBox/Jan)的数据目录——不授予全局读、不授予任何写权限，符合“只读提取上下文”的安全定位。路径变量：$DATA=系统数据目录，$CONFIG=系统配置目录，$HOME=用户主目录。精确路径将在 Phase 1 接入真实适配器时核实修正。",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        { "path": "$DATA/Jan/**" },
+        { "path": "$CONFIG/Jan/**" },
+        { "path": "$HOME/.jan/**" },
+        { "path": "$DATA/xyz.chatboxapp.ce/**" },
+        { "path": "$DATA/xyz.chatboxapp.app/**" },
+        { "path": "$CONFIG/xyz.chatboxapp.ce/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        { "path": "$DATA/Jan/**" },
+        { "path": "$CONFIG/Jan/**" },
+        { "path": "$HOME/.jan/**" },
+        { "path": "$DATA/xyz.chatboxapp.ce/**" },
+        { "path": "$DATA/xyz.chatboxapp.app/**" },
+        { "path": "$CONFIG/xyz.chatboxapp.ce/**" }
+      ]
+    }
+  ]
+}

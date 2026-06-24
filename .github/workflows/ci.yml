@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# 取消同一分支上正在进行的旧运行
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------- 代码质量门禁（Rust + 前端） ----------
+  lint:
+    name: Lint & Typecheck
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: contextsend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: contextsend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: contextsend
+
+      - name: 安装 Linux 系统依赖（编译 Tauri 所需）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: Rust 格式检查
+        run: cargo fmt --all --check
+
+      - name: Rust Clippy（零警告）
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust 测试
+        run: cargo test --workspace
+
+      - name: 前端 ESLint
+        run: pnpm lint
+
+      - name: 前端类型检查
+        run: pnpm typecheck
+
+      - name: 前端格式检查
+        run: pnpm format:check
+
+  # ---------- 三平台构建（验证可出包） ----------
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: contextsend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: contextsend
+
+      - name: 安装 Linux 系统依赖
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+        working-directory: contextsend
+
+      - name: 构建 Tauri 应用（未签名）
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: contextsend

@@ -1,0 +1,23 @@
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'Microsoft YaHei',
+    sans-serif;
+  color: #e6e6e6;
+  background-color: #1b1d22;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#app {
+  min-height: 100vh;
+}

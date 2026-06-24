@@ -1,0 +1,14 @@
+[package]
+name = "cs-core"
+description = "ContextSend 核心引擎：通用对话数据格式与抽象接口"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

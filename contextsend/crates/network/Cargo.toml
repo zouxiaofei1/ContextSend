@@ -1,0 +1,15 @@
+[package]
+name = "cs-network"
+description = "ContextSend 网络层：mDNS 发现、配对、AES-GCM 加密传输"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+cs-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,14 @@
+[package]
+name = "cs-adapters"
+description = "ContextSend 适配器层：从各本地 Chat AI 应用提取上下文并归一化为 cs-core 格式"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+cs-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
