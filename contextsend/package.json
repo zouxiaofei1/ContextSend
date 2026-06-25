@@ -1,13 +1,16 @@
 {
   "name": "contextsend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "sync-version": "node scripts/sync-version.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/sync-version.mjs",
     "build": "vue-tsc --build && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "pretauri": "node scripts/sync-version.mjs",
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

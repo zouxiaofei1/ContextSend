@@ -9,7 +9,7 @@ members = [
 
 # 各 crate 共享的元信息与依赖版本，统一在此处声明，子 crate 用 `.workspace = true` 引用。
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"

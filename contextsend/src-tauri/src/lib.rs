@@ -6,10 +6,11 @@
 mod commands;
 mod tray;
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use commands::AppState;
-use cs_network::{DeviceIdentity, NetworkService};
+use cs_network::{DeviceIdentity, NetEvent, NetworkService};
 use tauri::{Emitter, Manager, WindowEvent};
 use tokio::sync::OnceCell;
 
@@ -51,10 +52,40 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 match NetworkService::start(identity).await {
                     Ok((service, mut events_rx)) => {
-                        // 转发网络事件到前端。
+                        // 转发网络事件到前端，同时同步更新托盘设备列表。
                         let emit_handle = handle.clone();
+                        let tray_handle = handle.clone();
                         tauri::async_runtime::spawn(async move {
+                            let mut online_devices: HashMap<String, String> =
+                                HashMap::new();
                             while let Some(event) = events_rx.recv().await {
+                                // 跟踪在线设备变化
+                                let mut changed = false;
+                                match &event {
+                                    NetEvent::DeviceFound(device) => {
+                                        if device.online {
+                                            online_devices.insert(
+                                                device.id.clone(),
+                                                device.name.clone(),
+                                            );
+                                            changed = true;
+                                        }
+                                    }
+                                    NetEvent::DeviceLost { uuid } => {
+                                        online_devices.remove(uuid);
+                                        changed = true;
+                                    }
+                                    _ => {}
+                                }
+                                if changed {
+                                    let snapshot: Vec<_> = online_devices
+                                        .iter()
+                                        .map(|(id, name)| {
+                                            (id.clone(), name.clone())
+                                        })
+                                        .collect();
+                                    tray::update_menu(&tray_handle, &snapshot);
+                                }
                                 let _ = emit_handle.emit("net-event", event);
                             }
                         });

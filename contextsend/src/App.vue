@@ -12,7 +12,7 @@ import DevicePanel from './components/DevicePanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 
 const app = useAppStore()
-const { isPortrait } = useLayout()
+const { isPortrait, isCompact } = useLayout()
 
 // 全局：在窗口任意位置粘贴 / 拖入文本即匹配回本地会话并入库。
 useContextCapture()
@@ -39,11 +39,11 @@ function onSelectTab(tab: string): void {
 
 <template>
   <div class="app-root">
-    <TitleBar />
+    <TitleBar :portrait="isPortrait" />
 
     <!-- 横屏布局：左侧边栏 + 右侧内容 -->
     <div v-if="!isPortrait" class="app-layout">
-      <AppSidebar :active-tab="activeTab" @select="onSelectTab" />
+      <AppSidebar :active-tab="activeTab" :compact="isCompact" @select="onSelectTab" />
       <main class="app-main">
         <component :is="panelMap[activeTab]" />
       </main>
@@ -63,7 +63,6 @@ function onSelectTab(tab: string): void {
 .app-root {
   flex: 1;
   display: flex;
-  flex-direction: column;
   height: 100vh;
   min-width: 0;
 }
@@ -85,5 +84,7 @@ function onSelectTab(tab: string): void {
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-primary);
+  /* 顶部留出悬浮控制键/拖动区的安全区，避免内容被遮挡或顶部点击被拖动区拦截 */
+  padding-top: 36px;
 }
 </style>

@@ -2,7 +2,11 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useI18n } from 'vue-i18n'
-import appIcon from '../assets/app-icon.png'
+
+defineProps<{
+  /** 竖屏布局下无侧边栏，拖动区需让开整条顶部 */
+  portrait?: boolean
+}>()
 
 const { t } = useI18n()
 const appWindow = getCurrentWindow()
@@ -36,17 +40,10 @@ function close(): void {
 </script>
 
 <template>
-  <div class="titlebar" data-tauri-drag-region>
-    <!-- 左侧：图标 + 标题（整块可拖动） -->
-    <div class="titlebar__brand" data-tauri-drag-region>
-      <span class="titlebar__logo">📤</span>
-      <span class="titlebar__title">{{ t('app.title') }}</span>
-    </div>
+  <!-- 悬浮控制条：左侧弹性区可拖动窗口，右侧为窗口控制按钮，整体靠右 -->
+  <div class="titlebar" :class="{ 'titlebar--portrait': portrait }">
+    <div class="titlebar__drag" data-tauri-drag-region></div>
 
-    <!-- 中间弹性占位，扩大可拖动区域 -->
-    <div class="titlebar__spacer" data-tauri-drag-region></div>
-
-    <!-- 右侧：窗口控制按钮 -->
     <div class="titlebar__controls">
       <button class="titlebar__btn" :title="t('titlebar.minimize')" @click="minimize">
         <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
@@ -75,42 +72,35 @@ function close(): void {
 
 <style scoped>
 .titlebar {
+  position: fixed;
+  top: 0;
+  /* 让开左侧 220px 侧边栏，使侧边栏完整顶到顶部、不被拖动区覆盖 */
+  left: 220px;
+  right: 0;
   height: 36px;
-  flex-shrink: 0;
+  z-index: 100;
   display: flex;
   align-items: stretch;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.titlebar__brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.75rem;
+/* 竖屏无侧边栏：拖动区让开整条顶部 */
+.titlebar--portrait {
+  left: 0;
 }
 
-.titlebar__logo {
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.titlebar__title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.titlebar__spacer {
+/* 可拖动区域占据除按钮外的整条标题栏 */
+.titlebar__drag {
   flex: 1;
+  pointer-events: auto;
 }
 
 .titlebar__controls {
   display: flex;
   align-items: stretch;
+  pointer-events: auto;
 }
 
 .titlebar__btn {
