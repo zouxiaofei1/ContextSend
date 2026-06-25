@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { TOAST_MAX_VISIBLE, TOAST_DURATION } from '../constants'
 
 /** Toast 类型，决定配色与图标。 */
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
@@ -11,16 +12,6 @@ export interface Toast {
   message: string
   /** 自动消失时长（毫秒）；<=0 表示不自动消失，仅手动关闭。 */
   duration: number
-}
-
-/** 同时显示的最大条数，超出时挤掉最旧的一条，避免刷屏。 */
-const MAX_VISIBLE = 4
-/** 各类型默认时长：错误停留更久以便阅读。 */
-const DEFAULT_DURATION: Record<ToastType, number> = {
-  success: 3000,
-  info: 3000,
-  warning: 4000,
-  error: 5000,
 }
 
 /**
@@ -36,10 +27,10 @@ export const useToastStore = defineStore('toast', () => {
   /** 展示一条 toast，返回其 id。 */
   function show(type: ToastType, message: string, opts?: { duration?: number }): number {
     const id = ++seq
-    const duration = opts?.duration ?? DEFAULT_DURATION[type]
+    const duration = opts?.duration ?? TOAST_DURATION[type]
     toasts.value.push({ id, type, message, duration })
     // 超出上限时挤掉最旧的一条。
-    while (toasts.value.length > MAX_VISIBLE) {
+    while (toasts.value.length > TOAST_MAX_VISIBLE) {
       const oldest = toasts.value.shift()
       if (oldest) clearTimer(oldest.id)
     }

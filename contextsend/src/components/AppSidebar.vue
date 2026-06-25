@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useI18n } from 'vue-i18n'
+import { TAB_RECEIVE, TAB_DEVICES, TAB_SETTINGS } from '../constants'
 import iconReceive from '../assets/icon-receive.svg?raw'
 import iconDevices from '../assets/icon-devices.svg?raw'
 import iconSettings from '../assets/icon-settings.svg?raw'
@@ -20,9 +21,9 @@ const app = useAppStore()
 const { t } = useI18n()
 
 const navItems = [
-  { id: 'receive', icon: iconReceive, label: t('sidebar.receive') },
-  { id: 'devices', icon: iconDevices, label: t('sidebar.devices') },
-  { id: 'settings', icon: iconSettings, label: t('sidebar.settings') },
+  { id: TAB_RECEIVE, icon: iconReceive, label: t('sidebar.receive') },
+  { id: TAB_DEVICES, icon: iconDevices, label: t('sidebar.devices') },
+  { id: TAB_SETTINGS, icon: iconSettings, label: t('sidebar.settings') },
 ]
 
 // 键盘上下键导航

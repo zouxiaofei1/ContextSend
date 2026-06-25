@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { load, type Store } from '@tauri-apps/plugin-store'
+import { IPC, EVENT, STORE_FILE, STORE_KEY, ADAPTER_CHATBOX } from '../constants'
 import { useToastStore } from './toast'
 
 /** 与 Rust 端 `commands::AppInfo` 对应的应用信息。 */
@@ -118,13 +119,9 @@ export const useAppStore = defineStore('app', () => {
   const permissions = ref<Record<string, PermissionLevel>>({})
 
   // ---- 持久化（Tauri plugin-store，磁盘 JSON） ----
-  const STORE_FILE = 'segments.json'
-  const STORE_KEY = 'segments'
   let store: Store | null = null
 
   // 权限单独存一份磁盘 JSON（纯本地策略，按设备 uuid 记录等级）。
-  const PERM_FILE = 'permissions.json'
-  const PERM_KEY = 'permissions'
   let permStore: Store | null = null
 
   /** 简易 UUID（优先 crypto.randomUUID，回退到时间戳+随机）。 */
@@ -138,8 +135,8 @@ export const useAppStore = defineStore('app', () => {
   /** 把当前 segments 落盘（异步，失败仅记录不阻断 UI）。 */
   async function persistSegments(): Promise<void> {
     try {
-      if (!store) store = await load(STORE_FILE, { defaults: {}, autoSave: false })
-      await store.set(STORE_KEY, segments.value)
+      if (!store) store = await load(STORE_FILE.SEGMENTS, { defaults: {}, autoSave: false })
+      await store.set(STORE_KEY.SEGMENTS, segments.value)
       await store.save()
     } catch (e) {
       console.error('持久化对话失败:', e)
@@ -149,8 +146,8 @@ export const useAppStore = defineStore('app', () => {
   /** 从磁盘恢复 segments。 */
   async function loadSegments(): Promise<void> {
     try {
-      if (!store) store = await load(STORE_FILE, { defaults: {}, autoSave: false })
-      const saved = await store.get<ConversationSegment[]>(STORE_KEY)
+      if (!store) store = await load(STORE_FILE.SEGMENTS, { defaults: {}, autoSave: false })
+      const saved = await store.get<ConversationSegment[]>(STORE_KEY.SEGMENTS)
       if (Array.isArray(saved)) {
         segments.value = saved
         selectedSegmentId.value = saved[0]?.id ?? null
@@ -163,8 +160,8 @@ export const useAppStore = defineStore('app', () => {
   /** 把当前权限表落盘（失败仅记录不阻断 UI）。 */
   async function persistPermissions(): Promise<void> {
     try {
-      if (!permStore) permStore = await load(PERM_FILE, { defaults: {}, autoSave: false })
-      await permStore.set(PERM_KEY, permissions.value)
+      if (!permStore) permStore = await load(STORE_FILE.PERMISSIONS, { defaults: {}, autoSave: false })
+      await permStore.set(STORE_KEY.PERMISSIONS, permissions.value)
       await permStore.save()
     } catch (e) {
       console.error('持久化权限失败:', e)
@@ -174,8 +171,8 @@ export const useAppStore = defineStore('app', () => {
   /** 从磁盘恢复权限表。 */
   async function loadPermissions(): Promise<void> {
     try {
-      if (!permStore) permStore = await load(PERM_FILE, { defaults: {}, autoSave: false })
-      const saved = await permStore.get<Record<string, PermissionLevel>>(PERM_KEY)
+      if (!permStore) permStore = await load(STORE_FILE.PERMISSIONS, { defaults: {}, autoSave: false })
+      const saved = await permStore.get<Record<string, PermissionLevel>>(STORE_KEY.PERMISSIONS)
       if (saved && typeof saved === 'object') permissions.value = saved
     } catch (e) {
       console.error('恢复权限失败:', e)
@@ -202,9 +199,9 @@ export const useAppStore = defineStore('app', () => {
       await loadSegments()
       await loadPermissions()
       const [appInfo, self, devs] = await Promise.all([
-        invoke<AppInfo>('get_app_info'),
-        invoke<SelfIdentity>('get_self_identity'),
-        invoke<Device[]>('list_devices'),
+        invoke<AppInfo>(IPC.GET_APP_INFO),
+        invoke<SelfIdentity>(IPC.GET_SELF_IDENTITY),
+        invoke<Device[]>(IPC.LIST_DEVICES),
       ])
       info.value = appInfo
       identity.value = self
@@ -219,7 +216,7 @@ export const useAppStore = defineStore('app', () => {
   /** 重新拉取设备列表快照（权威覆盖）。 */
   async function refreshDevices(): Promise<void> {
     try {
-      devices.value = await invoke<Device[]>('list_devices')
+      devices.value = await invoke<Device[]>(IPC.LIST_DEVICES)
     } catch {
       /* 网络尚未就绪时忽略 */
     }
@@ -228,10 +225,10 @@ export const useAppStore = defineStore('app', () => {
   /** 订阅后端 `net-event`，把设备/配对/接收事件落到 store；并在网络就绪后刷新设备列表。 */
   async function subscribe(): Promise<void> {
     // 网络服务后台异步启动，就绪后补拉一次权威设备快照（消除启动竞态）。
-    await listen('net-ready', () => {
+    await listen(EVENT.NET_READY, () => {
       void refreshDevices()
     })
-    await listen<NetEvent>('net-event', (event) => {
+    await listen<NetEvent>(EVENT.NET_EVENT, (event) => {
       const p = event.payload
       switch (p.type) {
         case 'deviceFound': {
@@ -249,12 +246,12 @@ export const useAppStore = defineStore('app', () => {
           const level = permissionOf(p.peerUuid)
           if (level === -1) {
             // 已屏蔽：静默拒绝，不打扰用户。
-            void invoke('reject_pairing', { pairingId: p.pairingId })
+            void invoke(IPC.REJECT_PAIRING, { pairingId: p.pairingId })
             break
           }
           if (level === 1) {
             // 已信任：自动接收，不弹窗、不比对 PIN。
-            void invoke('accept_incoming', { pairingId: p.pairingId }).catch((e) => {
+            void invoke(IPC.ACCEPT_INCOMING, { pairingId: p.pairingId }).catch((e) => {
               toast.error(`接收失败：${String(e)}`)
             })
             break
@@ -282,7 +279,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** 给本机改名。 */
   async function renameSelf(name: string): Promise<void> {
-    await invoke('rename_self', { newName: name })
+    await invoke(IPC.RENAME_SELF, { newName: name })
     if (identity.value) identity.value.name = name
   }
 
@@ -300,12 +297,12 @@ export const useAppStore = defineStore('app', () => {
     upgrade = false,
   ): Promise<void> {
     try {
-      const res = await invoke<{ pairingId: number; pin: string }>('connect_pair', {
+      const res = await invoke<{ pairingId: number; pin: string }>(IPC.CONNECT_PAIR, {
         targetUuid,
       })
       // 已信任设备的普通推送：无需确认，直接推送（不弹窗、不展示 PIN）。
       if (!upgrade && permissionOf(targetUuid) === 1) {
-        await invoke('push_conversation', { pairingId: res.pairingId, conversation })
+        await invoke(IPC.PUSH_CONVERSATION, { pairingId: res.pairingId, conversation })
         toast.success('已推送当前对话')
         return
       }
@@ -328,7 +325,7 @@ export const useAppStore = defineStore('app', () => {
     if (!outgoing.value) return
     const { pairingId, targetUuid, upgrade, conversation } = outgoing.value
     try {
-      await invoke('push_conversation', { pairingId, conversation })
+      await invoke(IPC.PUSH_CONVERSATION, { pairingId, conversation })
       if (upgrade) setPermission(targetUuid, 2)
       toast.success('已推送当前对话')
     } catch (e) {
@@ -344,7 +341,7 @@ export const useAppStore = defineStore('app', () => {
     const { pairingId } = incoming.value
     incoming.value = null // 先关弹窗，避免请求失败时卡住遮罩。
     try {
-      await invoke('accept_incoming', { pairingId })
+      await invoke(IPC.ACCEPT_INCOMING, { pairingId })
     } catch (e) {
       toast.error(`接收失败：${String(e)}`)
     }
@@ -356,7 +353,7 @@ export const useAppStore = defineStore('app', () => {
     const { pairingId } = incoming.value
     incoming.value = null
     try {
-      await invoke('reject_pairing', { pairingId })
+      await invoke(IPC.REJECT_PAIRING, { pairingId })
     } catch (e) {
       toast.error(`拒绝失败：${String(e)}`)
     }
@@ -364,12 +361,12 @@ export const useAppStore = defineStore('app', () => {
 
   /** 导入 OpenAI Compatible JSON 文本。 */
   async function importOpenai(json: string): Promise<Conversation> {
-    return await invoke<Conversation>('import_openai', { json })
+    return await invoke<Conversation>(IPC.IMPORT_OPENAI, { json })
   }
 
   /** 导出对话为 OpenAI Compatible JSON 文本。 */
   async function exportOpenai(conversation: Conversation): Promise<string> {
-    return await invoke<string>('export_openai', { conversation })
+    return await invoke<string>(IPC.EXPORT_OPENAI, { conversation })
   }
 
   /**
@@ -379,7 +376,7 @@ export const useAppStore = defineStore('app', () => {
   async function matchContext(
     snippet: string,
   ): Promise<{ matched: boolean; app: string | null; score: number; conversation: Conversation }> {
-    return await invoke('match_context', { snippet })
+    return await invoke(IPC.MATCH_CONTEXT, { snippet })
   }
 
   /**
@@ -391,12 +388,12 @@ export const useAppStore = defineStore('app', () => {
    */
   async function importToApp(conversation: Conversation, appName: string): Promise<void> {
     try {
-      await invoke<{ app: string; threadId: string }>('import_to_app', {
+      await invoke<{ app: string; threadId: string }>(IPC.IMPORT_TO_APP, {
         app: appName,
         conversation,
       })
       toast.success(
-        appName.toLowerCase() === 'chatbox'
+        appName.toLowerCase() === ADAPTER_CHATBOX.toLowerCase()
           ? `已写入 ${appName}，侧栏已刷新即可看到新会话`
           : `已写入 ${appName}，切回 ${appName} 窗口即可看到新会话`,
       )

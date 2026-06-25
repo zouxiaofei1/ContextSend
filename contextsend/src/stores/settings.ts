@@ -4,22 +4,26 @@ import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart'
 import type { Locale } from '../i18n'
+import {
+  ACCENT_COLORS,
+  LS_SETTINGS,
+  DEFAULT_THEME,
+  DEFAULT_ACCENT_COLOR,
+  DEFAULT_LOCALE,
+  DEFAULT_MINIMIZE_TO_TRAY,
+  DEFAULT_AUTO_START,
+  DEFAULT_SHOW_ADVANCED,
+  DEFAULT_ALWAYS_ON_TOP,
+  DEFAULT_START_MINIMIZED,
+  DEFAULT_CUSTOM_PORT,
+  DEFAULT_CONNECTION_TIMEOUT,
+  PORT_MIN,
+  PORT_MAX,
+  TIMEOUT_MIN,
+  TIMEOUT_MAX,
+  IPC,
+} from '../constants'
 
-/** 预设主题色，包括 hex 值和对应的 hover 变体。 */
-export const ACCENT_COLORS: { hex: string; hover: string; name: string }[] = [
-  { hex: '#4C7CF3', hover: '#3A5FD9', name: '经典蓝 Classic Blue' },
-  { hex: '#6366F1', hover: '#4F46E5', name: '靛蓝紫 Indigo' },
-  { hex: '#8B5CF6', hover: '#7C3AED', name: '紫罗兰 Violet' },
-  { hex: '#EC4899', hover: '#DB2777', name: '玫红 Rose' },
-  { hex: '#EF4444', hover: '#DC2626', name: '赤红 Red' },
-  { hex: '#F97316', hover: '#EA580C', name: '活力橙 Orange' },
-  { hex: '#D97706', hover: '#B45309', name: '琥珀金 Amber' },
-  { hex: '#10B981', hover: '#059669', name: '翠绿 Emerald' },
-  { hex: '#14B8A6', hover: '#0D9488', name: '青碧 Teal' },
-  { hex: '#06B6D4', hover: '#0891B2', name: '天蓝 Cyan' },
-]
-
-const STORAGE_KEY = 'contextsend_settings'
 
 interface SettingsData {
   theme: 'light' | 'dark'
@@ -36,42 +40,44 @@ interface SettingsData {
 
 function loadSettings(): SettingsData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(LS_SETTINGS)
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<SettingsData>
       return {
-        theme: parsed.theme === 'light' ? 'light' : 'dark',
-        accentColor: parsed.accentColor || '#4C7CF3',
-        locale: parsed.locale === 'en-US' ? 'en-US' : 'zh-CN',
+        theme: parsed.theme === 'light' ? 'light' : DEFAULT_THEME,
+        accentColor: parsed.accentColor || DEFAULT_ACCENT_COLOR,
+        locale: parsed.locale === 'en-US' ? 'en-US' : DEFAULT_LOCALE,
         minimizeToTray: parsed.minimizeToTray !== false,
         autoStart: parsed.autoStart === true,
         showAdvanced: parsed.showAdvanced === true,
         alwaysOnTop: parsed.alwaysOnTop === true,
         startMinimized: parsed.startMinimized === true,
-        customPort: typeof parsed.customPort === 'number' ? parsed.customPort : 0,
+        customPort: typeof parsed.customPort === 'number' ? parsed.customPort : DEFAULT_CUSTOM_PORT,
         connectionTimeout:
-          typeof parsed.connectionTimeout === 'number' ? parsed.connectionTimeout : 30,
+          typeof parsed.connectionTimeout === 'number'
+            ? parsed.connectionTimeout
+            : DEFAULT_CONNECTION_TIMEOUT,
       }
     }
   } catch {
     // ignore corrupt data
   }
   return {
-    theme: 'dark',
-    accentColor: '#4C7CF3',
-    locale: 'zh-CN',
-    minimizeToTray: true,
-    autoStart: false,
-    showAdvanced: false,
-    alwaysOnTop: false,
-    startMinimized: false,
-    customPort: 0,
-    connectionTimeout: 30,
+    theme: DEFAULT_THEME,
+    accentColor: DEFAULT_ACCENT_COLOR,
+    locale: DEFAULT_LOCALE,
+    minimizeToTray: DEFAULT_MINIMIZE_TO_TRAY,
+    autoStart: DEFAULT_AUTO_START,
+    showAdvanced: DEFAULT_SHOW_ADVANCED,
+    alwaysOnTop: DEFAULT_ALWAYS_ON_TOP,
+    startMinimized: DEFAULT_START_MINIMIZED,
+    customPort: DEFAULT_CUSTOM_PORT,
+    connectionTimeout: DEFAULT_CONNECTION_TIMEOUT,
   }
 }
 
 function persist(data: SettingsData): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  localStorage.setItem(LS_SETTINGS, JSON.stringify(data))
 }
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -99,7 +105,7 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 将 minimizeToTray 和 autoStart 同步到 Rust 后端。 */
   async function syncBackend(): Promise<void> {
     try {
-      await invoke('set_minimize_to_tray', { enabled: minimizeToTray.value })
+      await invoke(IPC.SET_MINIMIZE_TO_TRAY, { enabled: minimizeToTray.value })
     } catch {
       // 后端可能未就绪
     }
@@ -154,25 +160,25 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   function setCustomPort(port: number): void {
-    if (!Number.isFinite(port) || port < 0) {
-      customPort.value = 0
-    } else if (port > 65535) {
-      customPort.value = 65535
+    if (!Number.isFinite(port) || port < PORT_MIN) {
+      customPort.value = PORT_MIN
+    } else if (port > PORT_MAX) {
+      customPort.value = PORT_MAX
     } else {
       customPort.value = Math.round(port)
     }
-    invoke('set_network_port', { port: customPort.value }).catch(() => {})
+    invoke(IPC.SET_NETWORK_PORT, { port: customPort.value }).catch(() => {})
   }
 
   function setConnectionTimeout(sec: number): void {
-    if (!Number.isFinite(sec) || sec < 1) {
-      connectionTimeout.value = 1
-    } else if (sec > 300) {
-      connectionTimeout.value = 300
+    if (!Number.isFinite(sec) || sec < TIMEOUT_MIN) {
+      connectionTimeout.value = TIMEOUT_MIN
+    } else if (sec > TIMEOUT_MAX) {
+      connectionTimeout.value = TIMEOUT_MAX
     } else {
       connectionTimeout.value = Math.round(sec)
     }
-    invoke('set_connection_timeout', { timeoutSecs: connectionTimeout.value }).catch(() => {})
+    invoke(IPC.SET_CONNECTION_TIMEOUT, { timeoutSecs: connectionTimeout.value }).catch(() => {})
   }
 
   /** 持久化所有设置到 localStorage，并同步 DOM 主题 + 后端。 */
@@ -209,7 +215,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // minimizeToTray 变化时同步后端
   watch(minimizeToTray, () => {
-    invoke('set_minimize_to_tray', { enabled: minimizeToTray.value }).catch(() => {})
+    invoke(IPC.SET_MINIMIZE_TO_TRAY, { enabled: minimizeToTray.value }).catch(() => {})
   })
 
   return {

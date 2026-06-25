@@ -5,6 +5,7 @@ import { useAppStore } from './stores/app'
 import { useSettingsStore } from './stores/settings'
 import { useLayout } from './composables/useLayout'
 import { useContextCapture } from './composables/useContextCapture'
+import { TAB_RECEIVE, TAB_DEVICES, TAB_SETTINGS } from './constants'
 import AppSidebar from './components/AppSidebar.vue'
 import BottomTabBar from './components/BottomTabBar.vue'
 import TitleBar from './components/TitleBar.vue'
@@ -19,13 +20,13 @@ const { isPortrait, isCompact } = useLayout()
 // 全局：在窗口任意位置粘贴 / 拖入文本即匹配回本地会话并入库。
 useContextCapture()
 
-const activeTab = ref<string>('receive')
+const activeTab = ref<string>(TAB_RECEIVE)
 
 /** 面板懒加载映射 */
 const panelMap: Record<string, unknown> = {
-  receive: ReceivePanel,
-  devices: DevicePanel,
-  settings: SettingsPanel,
+  [TAB_RECEIVE]: ReceivePanel,
+  [TAB_DEVICES]: DevicePanel,
+  [TAB_SETTINGS]: SettingsPanel,
 }
 
 onMounted(() => {

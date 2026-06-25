@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useAppStore, type ConversationSegment } from '../stores/app'
 import { useToastStore } from '../stores/toast'
 import { useI18n } from 'vue-i18n'
+import { ADAPTER_JAN, ADAPTER_CHATBOX } from '../constants'
 import MarkdownContent from './MarkdownContent.vue'
 
 const app = useAppStore()
@@ -120,10 +121,10 @@ async function onExport(): Promise<void> {
               <button class="small ghost" @click="app.selectSegment(s.id)">
                 {{ t('receive.setPushSource') }}
               </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">
+              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_JAN)">
                 {{ t('receive.importToJan') }}
               </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">
+              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_CHATBOX)">
                 {{ t('receive.importToChatBox') }}
               </button>
               <button class="small ghost danger" @click="app.removeSegment(s.id)">
@@ -162,10 +163,10 @@ async function onExport(): Promise<void> {
               <button class="small ghost" @click="app.selectSegment(s.id)">
                 {{ t('receive.setPushSource') }}
               </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">
+              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_JAN)">
                 {{ t('receive.importToJan') }}
               </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">
+              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_CHATBOX)">
                 {{ t('receive.importToChatBox') }}
               </button>
               <button class="small ghost danger" @click="app.removeSegment(s.id)">

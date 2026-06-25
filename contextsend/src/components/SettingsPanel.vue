@@ -2,7 +2,8 @@
 import { ref, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useToastStore } from '../stores/toast'
-import { useSettingsStore, ACCENT_COLORS } from '../stores/settings'
+import { useSettingsStore } from '../stores/settings'
+import { ACCENT_COLORS, GITHUB_URL, PORT_MIN, PORT_MAX, TIMEOUT_MIN, TIMEOUT_MAX } from '../constants'
 import { SUPPORTED_LOCALES } from '../i18n'
 import type { Locale } from '../i18n'
 import { useI18n } from 'vue-i18n'
@@ -13,8 +14,6 @@ const app = useAppStore()
 const toast = useToastStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
-
-const GITHUB_URL = 'https://github.com/zouxiaofei1/ContextSend'
 
 const renameText = ref(app.identity?.name ?? '')
 
@@ -219,8 +218,8 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
             class="number-input"
             :value="settings.customPort === 0 ? '' : settings.customPort"
             :placeholder="t('settings.advanced.portPlaceholder')"
-            min="1024"
-            max="65535"
+            :min="PORT_MIN"
+            :max="PORT_MAX"
             @change="settings.setCustomPort(Number(($event.target as HTMLInputElement).value))"
           />
         </div>
@@ -237,8 +236,8 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
             class="number-input"
             :value="settings.connectionTimeout"
             :placeholder="t('settings.advanced.timeoutPlaceholder')"
-            min="1"
-            max="300"
+            :min="TIMEOUT_MIN"
+            :max="TIMEOUT_MAX"
             @change="
               settings.setConnectionTimeout(Number(($event.target as HTMLInputElement).value))
             "
