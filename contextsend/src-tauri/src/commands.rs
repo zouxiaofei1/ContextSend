@@ -6,7 +6,7 @@
 use std::sync::Mutex;
 
 use cs_core::openai::{export_openai_json, import_openai_json};
-use cs_core::Conversation;
+use cs_core::{ChatMessage, Conversation};
 use cs_network::{Device, DeviceIdentity, NetworkService};
 use serde::Serialize;
 use tauri::State;
@@ -153,6 +153,72 @@ pub fn import_openai(json: String) -> Result<Conversation, String> {
 #[tauri::command]
 pub fn export_openai(conversation: Conversation) -> Result<String, String> {
     export_openai_json(&conversation).map_err(|e| e.to_string())
+}
+
+/// 导入结果：新建会话的 id 与目标应用名（供前端提示用户切回该应用查看）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    pub app: String,
+    pub thread_id: String,
+}
+
+/// 把一段对话导入到本机指定的 Chat AI 应用（写入其存储，使其出现新会话标签页）。
+///
+/// - **Jan**：写新 thread 目录（需切回 Jan 窗口或重启刷新）。
+/// - **ChatBox**：经 CDP 注入渲染进程写 IndexedDB 并自动刷新侧栏；需 ChatBox 已带
+///   `--remote-debugging-port=9222` 启动，否则返回提示错误。
+#[tauri::command]
+pub async fn import_to_app(
+    app: String,
+    conversation: Conversation,
+) -> Result<ImportResult, String> {
+    let thread_id = cs_adapters::import_conversation_to(&app, &conversation)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ImportResult { app, thread_id })
+}
+
+/// 片段匹配结果：是否命中本地某会话，命中则附来源应用与得分。
+///
+/// `conversation` 始终有值：命中时是匹配到的完整会话，未命中时是把片段本身
+/// 包成单条用户消息的占位会话，便于前端统一加入存储库。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchOutcome {
+    pub matched: bool,
+    pub app: Option<String>,
+    pub score: f32,
+    pub conversation: Conversation,
+}
+
+/// 把一段复制 / 拖入的上下文片段，匹配回本地应用里的完整会话（导出方向）。
+///
+/// 片段过短会返回错误；命中则返回整条会话，未命中则把片段包成占位会话返回。
+#[tauri::command]
+pub async fn match_context(snippet: String) -> Result<MatchOutcome, String> {
+    match cs_adapters::match_snippet(&snippet)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        Some(m) => Ok(MatchOutcome {
+            matched: true,
+            app: Some(m.app),
+            score: m.score,
+            conversation: m.conversation,
+        }),
+        None => {
+            // 未匹配到：把片段本身作为一段独立会话，仍纳入存储库。
+            let mut conversation = Conversation::new();
+            conversation.messages.push(ChatMessage::user(snippet));
+            Ok(MatchOutcome {
+                matched: false,
+                app: None,
+                score: 0.0,
+                conversation,
+            })
+        }
+    }
 }
 
 /// 设置关闭窗口时是否最小化到托盘。

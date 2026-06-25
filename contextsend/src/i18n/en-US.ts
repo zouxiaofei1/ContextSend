@@ -32,6 +32,12 @@ export default {
     emptySegments: 'No conversations yet. Pair to receive, or import below.',
     pushSource: 'Push source',
     setPushSource: 'Set as push source',
+    importToJan: 'Import to Jan',
+    importToChatBox: 'Import to ChatBox',
+    captureHint: 'Tip: paste or drop a context snippet anywhere in the window to auto-match and add it',
+    localSnippet: 'Local snippet',
+    matchFound: 'Matched a conversation in {app} and added to the library',
+    matchNone: 'No match found; added the snippet to the library',
   },
   device: {
     title: 'Devices',

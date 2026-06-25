@@ -96,6 +96,8 @@ pub fn run() {
             commands::reject_pairing,
             commands::import_openai,
             commands::export_openai,
+            commands::import_to_app,
+            commands::match_context,
             commands::set_minimize_to_tray,
         ])
         .run(tauri::generate_context!())

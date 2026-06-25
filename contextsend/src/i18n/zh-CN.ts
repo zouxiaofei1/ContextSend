@@ -32,6 +32,12 @@ export default {
     emptySegments: '暂无对话，配对接收或在下方导入。',
     pushSource: '推送源',
     setPushSource: '设为推送源',
+    importToJan: '导入到 Jan',
+    importToChatBox: '导入到 ChatBox',
+    captureHint: '提示：在窗口任意位置粘贴或拖入一段上下文，即可自动匹配会话并加入',
+    localSnippet: '本地片段',
+    matchFound: '已匹配到 {app} 的会话，并加入存储库',
+    matchNone: '未匹配到会话，已按片段加入存储库',
   },
   device: {
     title: '设备列表',

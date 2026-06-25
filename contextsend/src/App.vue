@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useAppStore } from './stores/app'
 import { useLayout } from './composables/useLayout'
+import { useContextCapture } from './composables/useContextCapture'
 import AppSidebar from './components/AppSidebar.vue'
 import BottomTabBar from './components/BottomTabBar.vue'
 import ReceivePanel from './components/ReceivePanel.vue'
@@ -11,6 +12,9 @@ import SettingsPanel from './components/SettingsPanel.vue'
 
 const app = useAppStore()
 const { isPortrait } = useLayout()
+
+// 全局：在窗口任意位置粘贴 / 拖入文本即匹配回本地会话并入库。
+useContextCapture()
 
 const activeTab = ref<string>('receive')
 

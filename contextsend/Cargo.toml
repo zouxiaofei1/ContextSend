@@ -26,12 +26,16 @@ cs-network = { path = "crates/network" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+dirs = "5"
 
 # 网络层（Phase 1）
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "macros", "time"] }
 mdns-sd = "0.11"
 uuid = { version = "1", features = ["v4", "serde"] }
 rand = "0.8"
+# ChatBox 导入：经 Chrome DevTools Protocol(ws://) 注入渲染进程写 IndexedDB。
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
 x25519-dalek = "2"
 aes-gcm = "0.10"
 hkdf = "0.12"

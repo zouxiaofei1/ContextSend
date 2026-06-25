@@ -372,6 +372,39 @@ export const useAppStore = defineStore('app', () => {
     return await invoke<string>('export_openai', { conversation })
   }
 
+  /**
+   * 把一段复制 / 拖入的上下文片段匹配回本地应用里的完整会话（导出方向）。
+   * 命中则返回整条会话，未命中则把片段包成占位会话；片段过短后端会报错。
+   */
+  async function matchContext(
+    snippet: string,
+  ): Promise<{ matched: boolean; app: string | null; score: number; conversation: Conversation }> {
+    return await invoke('match_context', { snippet })
+  }
+
+  /**
+   * 把一段对话导入到本机指定的 Chat AI 应用（写入其存储，使其出现新会话标签页）。
+   *
+   * - Jan：写文件，需切回 Jan 窗口（或重启）才刷新。
+   * - ChatBox：经 CDP 注入并自动刷新侧栏；需 ChatBox 已带
+   *   `--remote-debugging-port=9222` 启动，否则后端返回提示错误。
+   */
+  async function importToApp(conversation: Conversation, appName: string): Promise<void> {
+    error.value = null
+    try {
+      await invoke<{ app: string; threadId: string }>('import_to_app', {
+        app: appName,
+        conversation,
+      })
+      status.value =
+        appName.toLowerCase() === 'chatbox'
+          ? `已写入 ${appName}，侧栏已刷新即可看到新会话`
+          : `已写入 ${appName}，切回 ${appName} 窗口即可看到新会话`
+    } catch (e) {
+      error.value = `导入到 ${appName} 失败：${String(e)}`
+    }
+  }
+
   // ---- 段管理 ----
 
   /** 新增一段对话（最新在前），并落盘。返回新段 id。 */
@@ -451,6 +484,8 @@ export const useAppStore = defineStore('app', () => {
     rejectIncoming,
     importOpenai,
     exportOpenai,
+    matchContext,
+    importToApp,
     permissionOf,
     setPermission,
     addSegment,

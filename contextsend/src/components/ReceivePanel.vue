@@ -91,6 +91,8 @@ async function onExport(): Promise<void> {
 
     <p v-if="app.segments.length === 0" class="muted empty">{{ t('receive.emptySegments') }}</p>
 
+    <p class="muted capture-hint">{{ t('receive.captureHint') }}</p>
+
     <!-- 未读分组 -->
     <section v-if="unreadSegments.length" class="card">
       <button class="ghost section-toggle" @click="groupCollapsed.unread = !groupCollapsed.unread">
@@ -113,6 +115,8 @@ async function onExport(): Promise<void> {
             </div>
             <div class="seg-actions">
               <button class="small ghost" @click="app.selectSegment(s.id)">{{ t('receive.setPushSource') }}</button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">{{ t('receive.importToJan') }}</button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">{{ t('receive.importToChatBox') }}</button>
               <button class="small ghost danger" @click="app.removeSegment(s.id)">{{ t('receive.delete') }}</button>
             </div>
           </div>
@@ -142,6 +146,8 @@ async function onExport(): Promise<void> {
             </div>
             <div class="seg-actions">
               <button class="small ghost" @click="app.selectSegment(s.id)">{{ t('receive.setPushSource') }}</button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">{{ t('receive.importToJan') }}</button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">{{ t('receive.importToChatBox') }}</button>
               <button class="small ghost danger" @click="app.removeSegment(s.id)">{{ t('receive.delete') }}</button>
             </div>
           </div>
@@ -205,6 +211,11 @@ async function onExport(): Promise<void> {
 .empty {
   padding: 1.5rem 0;
   text-align: center;
+}
+
+.capture-hint {
+  font-size: 0.78rem;
+  margin: 0 0 0.75rem;
 }
 
 .card {
