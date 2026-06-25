@@ -42,6 +42,9 @@ export default {
     me: '(this device)',
     noDevices: 'No devices found (ensure same LAN, waiting for discovery…)',
     pair: 'Pair & Push',
+    push: 'Push',
+    more: 'More',
+    setPermission: 'Set Permission',
     pairingTitle: 'Pairing Code (verify with peer)',
     pairingHint:
       'Both sides must show the same code to prevent MITM attacks.',
@@ -49,6 +52,12 @@ export default {
     accept: 'Match — Accept',
     reject: 'Reject',
     cancel: 'Cancel',
+    sendConfirm: 'Send to "{name}"?',
+    sendConfirmHint: 'The current conversation will be pushed to this device.',
+    sendConfirmBtn: 'Send',
+    receiveConfirm: 'Receive conversation from "{name}"?',
+    receiveConfirmHint: 'This device wants to push a conversation to you.',
+    receiveBtn: 'Accept',
     fromRequest: 'Pairing request from "{name}"',
     pushedSuccess: 'Conversation pushed',
     permission: {

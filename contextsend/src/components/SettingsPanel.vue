@@ -1,23 +1,45 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useSettingsStore, ACCENT_COLORS } from '../stores/settings'
 import { SUPPORTED_LOCALES } from '../i18n'
 import type { Locale } from '../i18n'
 import { useI18n } from 'vue-i18n'
+import { generateRandomName } from '../utils/nameGenerator'
+import appIcon from '../assets/app-icon.png'
 
 const app = useAppStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
 
-const renameText = ref('')
+const GITHUB_URL = 'https://github.com/zouxiaofei1/ContextSend'
 
-async function onRename(): Promise<void> {
+const renameText = ref(app.identity?.name ?? '')
+
+// 当从后端加载完身份信息后，回填输入框
+watch(
+  () => app.identity?.name,
+  (name) => {
+    if (name) renameText.value = name
+  },
+)
+
+async function onRenameBlur(): Promise<void> {
   const name = renameText.value.trim()
-  if (!name) return
+  if (!name || name === app.identity?.name) {
+    renameText.value = app.identity?.name ?? ''
+    return
+  }
+  void applyRename(name)
+}
+
+async function applyRename(name: string): Promise<void> {
   await app.renameSelf(name)
-  renameText.value = ''
   app.status = t('common.renameSuccess')
+}
+
+function onRandomName(): void {
+  renameText.value = generateRandomName()
 }
 
 function onThemeToggle(): void {
@@ -33,6 +55,10 @@ function onLocaleChange(e: Event): void {
   const loc = target.value as Locale
   locale.value = loc
   settings.setLocale(loc)
+}
+
+function openGitHub(): void {
+  window.open(GITHUB_URL, '_blank')
 }
 
 const localeOptions = SUPPORTED_LOCALES.map((l) => ({
@@ -156,47 +182,33 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
         <div class="setting-row__control rename-control">
           <input
             v-model="renameText"
-            :placeholder="t('settings.renamePlaceholder')"
             class="rename-input"
+            @blur="onRenameBlur"
+            @keyup.enter="($event.target as HTMLInputElement).blur()"
           />
-          <button class="small" @click="onRename">
-            {{ t('settings.renameButton') }}
+          <button
+            class="ghost small random-name-btn"
+            :title="t('settings.randomName')"
+            @click="onRandomName"
+          >
+            🎲
           </button>
         </div>
       </div>
     </section>
 
     <!-- 关于 -->
-    <section v-if="app.info" class="settings-section">
-      <h2>{{ t('settings.about') }}</h2>
-
-      <div class="setting-row">
-        <div class="setting-row__label muted">{{ t('settings.version') }}</div>
-        <div class="setting-row__control">{{ app.info.version }}</div>
-      </div>
-
-      <div class="setting-row">
-        <div class="setting-row__label muted">{{ t('settings.platform') }}</div>
-        <div class="setting-row__control">{{ app.info.platform }}</div>
-      </div>
-
-      <div class="setting-row">
-        <div class="setting-row__label muted">{{ t('settings.adapters') }}</div>
-        <div class="setting-row__control">{{ app.info.adapters.join('、') }}</div>
-      </div>
-    </section>
-
-    <!-- 本机身份 -->
-    <section v-if="app.identity" class="settings-section">
-      <h2>{{ t('common.myDevice') }}</h2>
-      <div class="setting-row">
-        <div class="setting-row__label muted">{{ t('common.name') }}</div>
-        <div class="setting-row__control">
-          <strong>{{ app.identity.name }}</strong>
-          <span class="muted" style="margin-left: 0.5rem">
-            ({{ app.identity.uuid.slice(0, 8) }})
-          </span>
-        </div>
+    <section v-if="app.info" class="about-section">
+      <img
+        :src="appIcon"
+        alt="ContextSend"
+        class="about-icon"
+      />
+      <h1 class="about-title">ContextSend</h1>
+      <div class="about-meta">
+        <a class="about-link" @click.prevent="openGitHub">GitHub</a>
+        <span class="about-version">Ver {{ app.info.version }} ({{ app.info.platform }})</span>
+        <span class="about-license">MIT</span>
       </div>
     </section>
   </div>
@@ -276,6 +288,70 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
 }
 
 .rename-input {
-  width: 160px;
+  width: 200px;
+}
+
+.random-name-btn {
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+}
+
+/* ===== 关于区域 ===== */
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 2rem 0 1rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.about-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.about-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.about-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.about-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-version {
+  flex: 1;
+  text-align: center;
+}
+
+.about-license {
+  font-weight: 500;
 }
 </style>

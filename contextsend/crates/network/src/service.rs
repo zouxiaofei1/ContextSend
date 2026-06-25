@@ -190,18 +190,36 @@ impl NetworkService {
     ///
     /// 调用方应把配对码显示给用户，比对一致后再调用 [`Self::push`]。
     pub async fn connect_pair(&self, target_uuid: &str) -> Result<(u64, String), NetworkError> {
-        let addr = self
+        let addrs = self
             .inner
             .devices
             .lock()
             .unwrap()
             .get(target_uuid)
-            .map(|d| d.addr)
+            .map(|d| d.addrs.clone())
             .ok_or_else(|| NetworkError::Protocol("目标设备不在设备列表中".into()))?;
 
-        let stream = TcpStream::connect(addr)
+        // 对端可能广播了多块网卡（含虚拟网卡）的地址，逐个尝试，带超时避免卡在
+        // 不可达的虚拟子网上。
+        let mut last_err = NetworkError::Protocol("目标设备没有可用地址".into());
+        let mut stream = None;
+        for addr in &addrs {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                TcpStream::connect(addr),
+            )
             .await
-            .map_err(|e| NetworkError::Io(e.to_string()))?;
+            {
+                Ok(Ok(s)) => {
+                    stream = Some(s);
+                    break;
+                }
+                Ok(Err(e)) => last_err = NetworkError::Io(format!("{addr} 连接失败: {e}")),
+                Err(_) => last_err = NetworkError::Io(format!("{addr} 连接超时")),
+            }
+        }
+        let stream = stream.ok_or(last_err)?;
+
         let local = LocalHello {
             uuid: self.identity.uuid.clone(),
             name: self.identity.name.clone(),

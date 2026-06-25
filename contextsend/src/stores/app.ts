@@ -24,6 +24,12 @@ export interface Device {
   online: boolean
 }
 
+/**
+ * 设备权限等级（见路线图「权限模型」）。纯本地、非对称策略。
+ * -1 已屏蔽 / 0 陌生人（默认）/ 1 已信任 / 2 自动同步（升级须过配对码）。
+ */
+export type PermissionLevel = -1 | 0 | 1 | 2
+
 /** 一条对话消息（最小视图，多模态时 content 可能是数组）。 */
 export interface ChatMessage {
   role: string
@@ -59,6 +65,8 @@ export interface IncomingPairing {
   peerUuid: string
   peerName: string
   pin: string
+  /** 是否需要展示并比对 6 位配对码（仅 Level 2 升级流程为 true）。 */
+  showPin: boolean
 }
 
 /** 主动发起配对后等待确认的状态。 */
@@ -66,6 +74,12 @@ export interface OutgoingPairing {
   pairingId: number
   targetUuid: string
   pin: string
+  /** 该次配对是否为「升级到 Level 2」流程；确认后写入 Level 2。 */
+  upgrade: boolean
+  /** 是否需要展示并比对 6 位配对码（仅升级流程为 true）。 */
+  showPin: boolean
+  /** 确认后要推送的对话。 */
+  conversation: Conversation
 }
 
 /** 后端 `net-event` 事件（与 Rust `NetEvent` 的 serde 标签对应）。 */
@@ -98,10 +112,18 @@ export const useAppStore = defineStore('app', () => {
   const error = ref<string | null>(null)
   const loading = ref(false)
 
+  /** 各设备权限等级（本地、非对称），按 device uuid 索引；未记录的默认 Level 0。 */
+  const permissions = ref<Record<string, PermissionLevel>>({})
+
   // ---- 持久化（Tauri plugin-store，磁盘 JSON） ----
   const STORE_FILE = 'segments.json'
   const STORE_KEY = 'segments'
   let store: Store | null = null
+
+  // 权限单独存一份磁盘 JSON（纯本地策略，按设备 uuid 记录等级）。
+  const PERM_FILE = 'permissions.json'
+  const PERM_KEY = 'permissions'
+  let permStore: Store | null = null
 
   /** 简易 UUID（优先 crypto.randomUUID，回退到时间戳+随机）。 */
   function newId(): string {
@@ -136,6 +158,39 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  /** 把当前权限表落盘（失败仅记录不阻断 UI）。 */
+  async function persistPermissions(): Promise<void> {
+    try {
+      if (!permStore) permStore = await load(PERM_FILE, { defaults: {}, autoSave: false })
+      await permStore.set(PERM_KEY, permissions.value)
+      await permStore.save()
+    } catch (e) {
+      console.error('持久化权限失败:', e)
+    }
+  }
+
+  /** 从磁盘恢复权限表。 */
+  async function loadPermissions(): Promise<void> {
+    try {
+      if (!permStore) permStore = await load(PERM_FILE, { defaults: {}, autoSave: false })
+      const saved = await permStore.get<Record<string, PermissionLevel>>(PERM_KEY)
+      if (saved && typeof saved === 'object') permissions.value = saved
+    } catch (e) {
+      console.error('恢复权限失败:', e)
+    }
+  }
+
+  /** 读取某设备的权限等级（未记录则为默认 Level 0 陌生人）。 */
+  function permissionOf(id: string): PermissionLevel {
+    return permissions.value[id] ?? 0
+  }
+
+  /** 设置某设备的权限等级并落盘。Level 2 的升级须先经配对码验证（见 {@link startPairing}）。 */
+  function setPermission(id: string, level: PermissionLevel): void {
+    permissions.value[id] = level
+    void persistPermissions()
+  }
+
   /** 初始化：拉取应用信息、身份、设备列表，并订阅后端事件。 */
   async function init(): Promise<void> {
     loading.value = true
@@ -144,6 +199,7 @@ export const useAppStore = defineStore('app', () => {
       // 先订阅事件，避免错过网络就绪后立即发现的设备；三个独立查询并行拉取。
       await subscribe()
       await loadSegments()
+      await loadPermissions()
       const [appInfo, self, devs] = await Promise.all([
         invoke<AppInfo>('get_app_info'),
         invoke<SelfIdentity>('get_self_identity'),
@@ -187,14 +243,31 @@ export const useAppStore = defineStore('app', () => {
         case 'deviceLost':
           devices.value = devices.value.filter((d) => d.id !== p.uuid)
           break
-        case 'incomingPairing':
+        case 'incomingPairing': {
+          // 按本机对该设备的权限等级（本地、非对称）决定如何处理入站推送。
+          const level = permissionOf(p.peerUuid)
+          if (level === -1) {
+            // 已屏蔽：静默拒绝，不打扰用户。
+            void invoke('reject_pairing', { pairingId: p.pairingId })
+            break
+          }
+          if (level === 1) {
+            // 已信任：自动接收，不弹窗、不比对 PIN。
+            void invoke('accept_incoming', { pairingId: p.pairingId }).catch((e) => {
+              error.value = `接收失败：${String(e)}`
+            })
+            break
+          }
+          // Level 0 陌生人：按设备名确认（不展示 PIN）；Level 2：展示 PIN 比对。
           incoming.value = {
             pairingId: p.pairingId,
             peerUuid: p.peerUuid,
             peerName: p.peerName,
             pin: p.pin,
+            showPin: level >= 2,
           }
           break
+        }
         case 'conversationReceived':
           addSegment(p.fromName, p.conversation, false)
           status.value = `收到来自「${p.fromName}」的 ${p.conversation.messages.length} 条消息`
@@ -212,24 +285,57 @@ export const useAppStore = defineStore('app', () => {
     if (identity.value) identity.value.name = name
   }
 
-  /** 主动向设备发起配对，进入「等待比对配对码」状态。 */
-  async function startPairing(targetUuid: string): Promise<void> {
+  /**
+   * 主动向设备推送对话。按本机对该设备的权限等级决定流程：
+   * - Level 1（已信任）：建立加密会话后直接推送，不弹窗、不展示 PIN；
+   * - Level 0（陌生人）：弹「发送给 X?」按名确认（不展示 PIN），确认后推送；
+   * - upgrade=true（升级到 Level 2）：展示 6 位配对码比对，确认后推送并写入 Level 2。
+   *
+   * 后台无论哪一级都走完整加密握手，区别只在是否展示/比对配对码。
+   */
+  async function startPairing(
+    targetUuid: string,
+    conversation: Conversation,
+    upgrade = false,
+  ): Promise<void> {
     error.value = null
-    const res = await invoke<{ pairingId: number; pin: string }>('connect_pair', {
-      targetUuid,
-    })
-    outgoing.value = { pairingId: res.pairingId, targetUuid, pin: res.pin }
+    try {
+      const res = await invoke<{ pairingId: number; pin: string }>('connect_pair', {
+        targetUuid,
+      })
+      // 已信任设备的普通推送：无需确认，直接推送（不弹窗、不展示 PIN）。
+      if (!upgrade && permissionOf(targetUuid) === 1) {
+        await invoke('push_conversation', { pairingId: res.pairingId, conversation })
+        status.value = '已推送当前对话'
+        return
+      }
+      // Level 0 陌生人（按名确认）或升级到 Level 2（比对 PIN）：弹窗等用户确认。
+      outgoing.value = {
+        pairingId: res.pairingId,
+        targetUuid,
+        pin: res.pin,
+        upgrade,
+        showPin: upgrade,
+        conversation,
+      }
+    } catch (e) {
+      error.value = `配对失败：${String(e)}`
+    }
   }
 
-  /** 确认主动配对码一致后，推送给定对话。 */
-  async function confirmAndPush(conversation: Conversation): Promise<void> {
+  /** 确认后推送 `outgoing` 中暂存的对话；若为升级流程则把对端置为 Level 2。 */
+  async function confirmAndPush(): Promise<void> {
     if (!outgoing.value) return
-    await invoke('push_conversation', {
-      pairingId: outgoing.value.pairingId,
-      conversation,
-    })
-    status.value = '已推送当前对话'
-    outgoing.value = null
+    const { pairingId, targetUuid, upgrade, conversation } = outgoing.value
+    try {
+      await invoke('push_conversation', { pairingId, conversation })
+      if (upgrade) setPermission(targetUuid, 2)
+      status.value = '已推送当前对话'
+    } catch (e) {
+      error.value = `推送失败：${String(e)}`
+    } finally {
+      outgoing.value = null
+    }
   }
 
   /** 确认入站配对码一致后，接收对端对话。 */
@@ -326,6 +432,7 @@ export const useAppStore = defineStore('app', () => {
     status,
     error,
     loading,
+    permissions,
     init,
     renameSelf,
     startPairing,
@@ -334,6 +441,8 @@ export const useAppStore = defineStore('app', () => {
     rejectIncoming,
     importOpenai,
     exportOpenai,
+    permissionOf,
+    setPermission,
     addSegment,
     markRead,
     markAllRead,

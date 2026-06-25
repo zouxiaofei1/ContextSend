@@ -19,7 +19,8 @@ pub const SERVICE_TYPE: &str = "_contextsend._tcp.local.";
 pub struct DiscoveredDevice {
     pub uuid: String,
     pub name: String,
-    pub addr: SocketAddr,
+    /// 对端广播的所有候选地址（多网卡时含虚拟网卡），连接时逐个尝试。
+    pub addrs: Vec<SocketAddr>,
 }
 
 /// 发现层向上层推送的事件。
@@ -85,12 +86,13 @@ impl Discovery {
                             .map(str::to_string)
                             .unwrap_or_else(|| uuid.clone());
                         let port = info.get_port();
-                        if let Some(ip) = info.get_addresses().iter().next() {
-                            let device = DiscoveredDevice {
-                                uuid,
-                                name,
-                                addr: SocketAddr::new(*ip, port),
-                            };
+                        let addrs: Vec<SocketAddr> = info
+                            .get_addresses()
+                            .iter()
+                            .map(|ip| SocketAddr::new(*ip, port))
+                            .collect();
+                        if !addrs.is_empty() {
+                            let device = DiscoveredDevice { uuid, name, addrs };
                             if tx.send(DiscoveryEvent::Found(device)).is_err() {
                                 break; // 上层已关闭。
                             }
