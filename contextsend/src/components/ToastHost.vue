@@ -117,7 +117,9 @@ const ICONS: Record<ToastType, string> = {
   line-height: 1;
   border-radius: 4px;
   opacity: 0.6;
-  transition: opacity 0.15s, color 0.15s;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
 }
 .toast__close:hover {
   background: transparent;

@@ -70,18 +70,15 @@ pub fn run() {
                         let emit_handle = handle.clone();
                         let tray_handle = handle.clone();
                         tauri::async_runtime::spawn(async move {
-                            let mut online_devices: HashMap<String, String> =
-                                HashMap::new();
+                            let mut online_devices: HashMap<String, String> = HashMap::new();
                             while let Some(event) = events_rx.recv().await {
                                 // 跟踪在线设备变化
                                 let mut changed = false;
                                 match &event {
                                     NetEvent::DeviceFound(device) => {
                                         if device.online {
-                                            online_devices.insert(
-                                                device.id.clone(),
-                                                device.name.clone(),
-                                            );
+                                            online_devices
+                                                .insert(device.id.clone(), device.name.clone());
                                             changed = true;
                                         }
                                     }
@@ -94,16 +91,11 @@ pub fn run() {
                                 if changed {
                                     let snapshot: Vec<_> = online_devices
                                         .iter()
-                                        .map(|(id, name)| {
-                                            (id.clone(), name.clone())
-                                        })
+                                        .map(|(id, name)| (id.clone(), name.clone()))
                                         .collect();
                                     // 写入 AppState 供托盘菜单读取
-                                    if let Some(state) =
-                                        tray_handle.try_state::<AppState>()
-                                    {
-                                        *state.online_devices.lock().unwrap() =
-                                            snapshot;
+                                    if let Some(state) = tray_handle.try_state::<AppState>() {
+                                        *state.online_devices.lock().unwrap() = snapshot;
                                     }
                                     tray::update_menu(&tray_handle);
                                 }

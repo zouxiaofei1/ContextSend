@@ -236,13 +236,10 @@ pub struct MatchOutcome {
 #[tauri::command]
 pub async fn match_context(snippet: String) -> Result<MatchOutcome, String> {
     log::info!("片段匹配请求: snippet_chars={}", snippet.chars().count());
-    match cs_adapters::match_snippet(&snippet)
-        .await
-        .map_err(|e| {
-            log::warn!("片段匹配出错: err={e}");
-            e.to_string()
-        })?
-    {
+    match cs_adapters::match_snippet(&snippet).await.map_err(|e| {
+        log::warn!("片段匹配出错: err={e}");
+        e.to_string()
+    })? {
         Some(m) => {
             log::info!("片段命中: app={} score={:.3}", m.app, m.score);
             Ok(MatchOutcome {

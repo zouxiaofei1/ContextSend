@@ -82,7 +82,9 @@ async function onExport(): Promise<void> {
     <div class="toolbar">
       <h2>{{ t('receive.title') }}</h2>
       <div class="toolbar__actions" v-if="app.segments.length">
-        <button class="small ghost" @click="app.markAllRead()">{{ t('receive.markAllRead') }}</button>
+        <button class="small ghost" @click="app.markAllRead()">
+          {{ t('receive.markAllRead') }}
+        </button>
         <button class="small ghost" @click="onClear()">{{ t('receive.clear') }}</button>
       </div>
     </div>
@@ -94,7 +96,9 @@ async function onExport(): Promise<void> {
     <!-- 未读分组 -->
     <section v-if="unreadSegments.length" class="card">
       <button class="ghost section-toggle" @click="groupCollapsed.unread = !groupCollapsed.unread">
-        {{ groupCollapsed.unread ? '▶' : '▼' }} {{ t('receive.unread') }} ({{ unreadSegments.length }})
+        {{ groupCollapsed.unread ? '▶' : '▼' }} {{ t('receive.unread') }} ({{
+          unreadSegments.length
+        }})
       </button>
       <ul v-show="!groupCollapsed.unread" class="seg-list">
         <li v-for="s in unreadSegments" :key="s.id" class="seg-item seg-item--unread">
@@ -102,7 +106,8 @@ async function onExport(): Promise<void> {
             <span class="seg-toggle muted">{{ isExpanded(s.id) ? '▲' : '▼' }}</span>
             <span class="seg-title">{{ segTitle(s) }}</span>
             <span class="seg-meta muted">
-              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} · {{ t('receive.count', { count: s.conversation.messages.length }) }}
+              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} ·
+              {{ t('receive.count', { count: s.conversation.messages.length }) }}
             </span>
             <span class="dot-new" />
           </div>
@@ -112,10 +117,18 @@ async function onExport(): Promise<void> {
               <MarkdownContent :content="m.content" />
             </div>
             <div class="seg-actions">
-              <button class="small ghost" @click="app.selectSegment(s.id)">{{ t('receive.setPushSource') }}</button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">{{ t('receive.importToJan') }}</button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">{{ t('receive.importToChatBox') }}</button>
-              <button class="small ghost danger" @click="app.removeSegment(s.id)">{{ t('receive.delete') }}</button>
+              <button class="small ghost" @click="app.selectSegment(s.id)">
+                {{ t('receive.setPushSource') }}
+              </button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">
+                {{ t('receive.importToJan') }}
+              </button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">
+                {{ t('receive.importToChatBox') }}
+              </button>
+              <button class="small ghost danger" @click="app.removeSegment(s.id)">
+                {{ t('receive.delete') }}
+              </button>
             </div>
           </div>
         </li>
@@ -133,9 +146,12 @@ async function onExport(): Promise<void> {
             <span class="seg-toggle muted">{{ isExpanded(s.id) ? '▲' : '▼' }}</span>
             <span class="seg-title">{{ segTitle(s) }}</span>
             <span class="seg-meta muted">
-              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} · {{ t('receive.count', { count: s.conversation.messages.length }) }}
+              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} ·
+              {{ t('receive.count', { count: s.conversation.messages.length }) }}
             </span>
-            <span v-if="s.id === app.selectedSegmentId" class="push-badge">{{ t('receive.pushSource') }}</span>
+            <span v-if="s.id === app.selectedSegmentId" class="push-badge">{{
+              t('receive.pushSource')
+            }}</span>
           </div>
           <div v-if="isExpanded(s.id)" class="seg-body">
             <div v-for="(m, i) in s.conversation.messages" :key="i" class="msg">
@@ -143,10 +159,18 @@ async function onExport(): Promise<void> {
               <MarkdownContent :content="m.content" />
             </div>
             <div class="seg-actions">
-              <button class="small ghost" @click="app.selectSegment(s.id)">{{ t('receive.setPushSource') }}</button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">{{ t('receive.importToJan') }}</button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">{{ t('receive.importToChatBox') }}</button>
-              <button class="small ghost danger" @click="app.removeSegment(s.id)">{{ t('receive.delete') }}</button>
+              <button class="small ghost" @click="app.selectSegment(s.id)">
+                {{ t('receive.setPushSource') }}
+              </button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'Jan')">
+                {{ t('receive.importToJan') }}
+              </button>
+              <button class="small ghost" @click="app.importToApp(s.conversation, 'ChatBox')">
+                {{ t('receive.importToChatBox') }}
+              </button>
+              <button class="small ghost danger" @click="app.removeSegment(s.id)">
+                {{ t('receive.delete') }}
+              </button>
             </div>
           </div>
         </li>

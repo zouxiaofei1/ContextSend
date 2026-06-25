@@ -9,8 +9,7 @@ const { t } = useI18n()
 
 /** 推送源：接收页选定的段，回退到最新段，再回退到示例对话。 */
 const pushConversation = computed<Conversation>(() => {
-  const seg =
-    app.segments.find((s) => s.id === app.selectedSegmentId) ?? app.segments[0]
+  const seg = app.segments.find((s) => s.id === app.selectedSegmentId) ?? app.segments[0]
   if (seg) return seg.conversation
   return {
     title: '示例对话',
@@ -75,32 +74,26 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
       <h2>{{ t('device.online') }} ({{ onlineDevices.length }})</h2>
       <ul v-if="onlineDevices.length" class="device-list">
         <li v-for="d in onlineDevices" :key="d.id" class="device-item">
-          <span class="dot online" />
+          <span v-if="d.id === app.identity?.uuid" class="dot self" />
+          <span v-else class="dot" :class="levelMeta(app.permissionOf(d.id)).cls" />
           <span class="device-name">{{ d.name }}</span>
           <span class="muted" v-if="d.id === app.identity?.uuid">({{ t('device.me') }})</span>
-          <span
-            v-else
-            class="permission-badge"
-            :class="levelMeta(app.permissionOf(d.id)).cls"
-          >
-            {{ t(`device.permission.${levelMeta(app.permissionOf(d.id)).key}`) }}
-          </span>
 
           <!-- 弹性空隙：把操作推到右侧 -->
           <span class="spacer" />
 
           <template v-if="d.id !== app.identity?.uuid">
-            <button
-              class="small"
-              :disabled="app.permissionOf(d.id) === -1"
-              @click="push(d)"
-            >
+            <button class="small" :disabled="app.permissionOf(d.id) === -1" @click="push(d)">
               {{ t('device.push') }}
             </button>
 
             <!-- 「...」更多菜单 -->
             <div class="more">
-              <button class="ghost small more-btn" :title="t('device.more')" @click="toggleMenu(d.id)">
+              <button
+                class="ghost small more-btn"
+                :title="t('device.more')"
+                @click="toggleMenu(d.id)"
+              >
                 ⋯
               </button>
               <template v-if="openMenuId === d.id">
@@ -115,9 +108,7 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
                     :class="{ active: app.permissionOf(d.id) === m.level }"
                     @click="chooseLevel(d, m.level)"
                   >
-                    <span class="permission-badge" :class="m.cls">
-                      {{ t(`device.permission.${m.key}`) }}
-                    </span>
+                    <span>{{ t(`device.permission.${m.key}`) }}</span>
                     <span v-if="app.permissionOf(d.id) === m.level" class="check">✓</span>
                   </button>
                 </div>
@@ -264,30 +255,25 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
   flex: 1;
 }
 
-/* ===== 权限徽章 ===== */
-.permission-badge {
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid currentColor;
-  white-space: nowrap;
+/* ===== 圆点信任等级着色 ===== */
+.dot.self {
+  background: var(--success);
 }
 
-.permission-badge.blocked {
-  color: var(--danger, #e5534b);
+.dot.blocked {
+  background: var(--danger);
 }
 
-.permission-badge.stranger {
-  color: #d9a441;
+.dot.stranger {
+  background: var(--warning);
 }
 
-.permission-badge.trusted {
-  color: #41c171;
+.dot.trusted {
+  background: var(--success);
 }
 
-.permission-badge.sync {
-  color: var(--accent);
+.dot.sync {
+  background: var(--accent);
 }
 
 /* ===== 「...」更多菜单 ===== */

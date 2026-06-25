@@ -62,7 +62,9 @@ const navItems = [
   color: var(--text-secondary);
   font-size: 0.7rem;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   min-width: 64px;
 }
 

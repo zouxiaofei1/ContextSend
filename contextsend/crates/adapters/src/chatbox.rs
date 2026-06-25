@@ -55,7 +55,12 @@ fn parse_role(s: &str) -> Role {
 
 /// 为会话取一个展示标题：优先 `title`，否则取首条非空消息前若干字，再退到默认。
 fn session_name(convo: &Conversation) -> String {
-    if let Some(t) = convo.title.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(t) = convo
+        .title
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         return t.to_string();
     }
     for m in &convo.messages {
@@ -77,7 +82,10 @@ fn http_body(raw: &str) -> Option<&str> {
 /// 从响应头里解析 `Content-Length`（字节数）。
 fn content_length(head: &str) -> Option<usize> {
     head.lines()
-        .find_map(|l| l.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case("content-length")))
+        .find_map(|l| {
+            l.split_once(':')
+                .filter(|(k, _)| k.eq_ignore_ascii_case("content-length"))
+        })
         .and_then(|(_, v)| v.trim().parse().ok())
 }
 
@@ -149,20 +157,27 @@ async fn page_target_ws() -> Result<String, AdapterError> {
         .find(|t| t.get("type").and_then(|v| v.as_str()) == Some("page"))
         .and_then(|t| t.get("webSocketDebuggerUrl").and_then(|v| v.as_str()))
         .map(String::from)
-        .ok_or_else(|| AdapterError::ChatBox("未找到可注入的 page target（ChatBox 窗口未就绪？）".into()))
+        .ok_or_else(|| {
+            AdapterError::ChatBox("未找到可注入的 page target（ChatBox 窗口未就绪？）".into())
+        })
 }
 
 /// 在渲染进程里执行一段 JS（`Runtime.evaluate`），返回 `result.value`。
 ///
 /// `await_promise=true` 时等待表达式返回的 Promise resolve。
-async fn cdp_evaluate(ws_url: &str, expression: &str, await_promise: bool) -> Result<Value, AdapterError> {
+async fn cdp_evaluate(
+    ws_url: &str,
+    expression: &str,
+    await_promise: bool,
+) -> Result<Value, AdapterError> {
     let (mut ws, _) = tokio_tungstenite::connect_async(ws_url)
         .await
         .map_err(|e| AdapterError::ChatBox(format!("CDP WebSocket 连接失败: {e}")))?;
 
     // 先启用 Runtime 域。
     let enable = serde_json::json!({ "id": 1, "method": "Runtime.enable" });
-    ws.send(WsMessage::Text(enable.to_string())).await
+    ws.send(WsMessage::Text(enable.to_string()))
+        .await
         .map_err(|e| AdapterError::ChatBox(format!("CDP 发送失败: {e}")))?;
 
     let eval = serde_json::json!({
@@ -174,7 +189,8 @@ async fn cdp_evaluate(ws_url: &str, expression: &str, await_promise: bool) -> Re
             "returnByValue": true,
         }
     });
-    ws.send(WsMessage::Text(eval.to_string())).await
+    ws.send(WsMessage::Text(eval.to_string()))
+        .await
         .map_err(|e| AdapterError::ChatBox(format!("CDP 发送失败: {e}")))?;
 
     // 读消息直到拿到 id==2 的响应（跳过事件与 enable 的 ack）。
@@ -545,7 +561,8 @@ mod tests {
     #[test]
     fn session_name_falls_back_to_first_message_snippet() {
         let mut c = Conversation::new();
-        c.messages.push(ChatMessage::user("这是第一条消息的内容用于做标题回退"));
+        c.messages
+            .push(ChatMessage::user("这是第一条消息的内容用于做标题回退"));
         let name = session_name(&c);
         assert!(name.starts_with("这是第一条消息"));
         assert!(name.chars().count() <= 20);

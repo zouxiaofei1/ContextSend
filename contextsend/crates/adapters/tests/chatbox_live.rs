@@ -10,8 +10,9 @@ async fn live_import_to_chatbox() {
     c.title = Some("ContextSend 注入测试".into());
     c.messages
         .push(ChatMessage::user("这条会话由 ContextSend 经 CDP 注入"));
-    c.messages
-        .push(ChatMessage::assistant("如果你在侧栏看到我，说明导入链路打通了"));
+    c.messages.push(ChatMessage::assistant(
+        "如果你在侧栏看到我，说明导入链路打通了",
+    ));
 
     let id = cs_adapters::import_to_chatbox(&c)
         .await

@@ -217,11 +217,8 @@ impl NetworkService {
         let mut stream = None;
         for addr in &addrs {
             log::debug!("尝试连接目标地址: {addr}");
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(3),
-                TcpStream::connect(addr),
-            )
-            .await
+            match tokio::time::timeout(std::time::Duration::from_secs(3), TcpStream::connect(addr))
+                .await
             {
                 Ok(Ok(s)) => {
                     log::debug!("已连接目标地址: {addr}");

@@ -27,7 +27,7 @@ const navItems = [
 
 // 键盘上下键导航
 const navRefs = ref<(HTMLElement | null)[]>([])
-const focusedIndex = ref(navItems.findIndex(item => item.id === props.activeTab))
+const focusedIndex = ref(navItems.findIndex((item) => item.id === props.activeTab))
 
 function onNavFocus(index: number) {
   focusedIndex.value = index
@@ -53,7 +53,11 @@ function onNavKeydown(e: KeyboardEvent) {
     <!-- Logo 区 -->
     <div class="sidebar__logo">
       <img class="sidebar__logo-icon" :src="appIcon" alt="" />
-      <span class="sidebar__logo-text sidebar__text" :class="{ 'sidebar__text--hidden': compact }">{{ t('app.title') }}</span>
+      <span
+        class="sidebar__logo-text sidebar__text"
+        :class="{ 'sidebar__text--hidden': compact }"
+        >{{ t('app.title') }}</span
+      >
     </div>
 
     <!-- 导航项 -->
@@ -61,21 +65,31 @@ function onNavKeydown(e: KeyboardEvent) {
       <button
         v-for="(item, index) in navItems"
         :key="item.id"
-        :ref="el => { if (el) navRefs[index] = el as HTMLElement }"
+        :ref="
+          (el) => {
+            if (el) navRefs[index] = el as HTMLElement
+          }
+        "
         class="sidebar__nav-item"
         :class="{ 'sidebar__nav-item--active': activeTab === item.id }"
         @click="emit('select', item.id)"
         @focus="onNavFocus(index)"
       >
         <span class="sidebar__nav-icon" v-html="item.icon"></span>
-        <span class="sidebar__nav-label sidebar__text" :class="{ 'sidebar__text--hidden': compact }">{{ item.label }}</span>
+        <span
+          class="sidebar__nav-label sidebar__text"
+          :class="{ 'sidebar__text--hidden': compact }"
+          >{{ item.label }}</span
+        >
       </button>
     </nav>
 
     <!-- 底部本机信息 -->
     <div class="sidebar__footer" v-if="app.identity">
       <span class="dot online" />
-      <span class="sidebar__text muted" :class="{ 'sidebar__text--hidden': compact }">{{ app.identity.name }}</span>
+      <span class="sidebar__text muted" :class="{ 'sidebar__text--hidden': compact }">{{
+        app.identity.name
+      }}</span>
     </div>
   </aside>
 </template>
@@ -91,7 +105,9 @@ function onNavKeydown(e: KeyboardEvent) {
   flex-direction: column;
   user-select: none;
   -webkit-user-select: none;
-  transition: width 0.12s ease, min-width 0.12s ease;
+  transition:
+    width 0.12s ease,
+    min-width 0.12s ease;
 }
 
 .sidebar__logo {
@@ -100,7 +116,9 @@ function onNavKeydown(e: KeyboardEvent) {
   gap: 0.5rem;
   padding: 1.25rem 1rem;
   border-bottom: 1px solid var(--border);
-  transition: gap 0.12s ease, padding 0.12s ease;
+  transition:
+    gap 0.12s ease,
+    padding 0.12s ease;
 }
 
 .sidebar__logo-icon {
@@ -136,7 +154,11 @@ function onNavKeydown(e: KeyboardEvent) {
   font-size: 0.9rem;
   border: none;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, gap 0.12s ease, padding 0.12s ease;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    gap 0.12s ease,
+    padding 0.12s ease;
   text-align: left;
   width: 100%;
 }
@@ -174,7 +196,9 @@ function onNavKeydown(e: KeyboardEvent) {
 .sidebar__text {
   overflow: hidden;
   white-space: nowrap;
-  transition: opacity 0.1s ease, max-width 0.12s ease;
+  transition:
+    opacity 0.1s ease,
+    max-width 0.12s ease;
 }
 
 .sidebar__text--hidden {
@@ -216,6 +240,8 @@ function onNavKeydown(e: KeyboardEvent) {
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--border);
   font-size: 0.8rem;
-  transition: gap 0.12s ease, padding 0.12s ease;
+  transition:
+    gap 0.12s ease,
+    padding 0.12s ease;
 }
 </style>

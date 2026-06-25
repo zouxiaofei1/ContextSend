@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useAppStore } from './stores/app'
+import { useSettingsStore } from './stores/settings'
 import { useLayout } from './composables/useLayout'
 import { useContextCapture } from './composables/useContextCapture'
 import AppSidebar from './components/AppSidebar.vue'
@@ -28,9 +29,19 @@ const panelMap: Record<string, unknown> = {
 }
 
 onMounted(() => {
-  // 首帧已挂载，立即显示窗口（窗口配置为初始隐藏，避免冷启动白屏）。
-  void getCurrentWindow().show()
   void app.init()
+
+  const settings = useSettingsStore()
+  if (settings.alwaysOnTop) {
+    getCurrentWindow()
+      .setAlwaysOnTop(true)
+      .catch(() => {})
+  }
+
+  // 若用户启用了"启动时最小化"，则保持窗口隐藏（仅托盘图标可见）
+  if (!settings.startMinimized) {
+    void getCurrentWindow().show()
+  }
 })
 
 function onSelectTab(tab: string): void {

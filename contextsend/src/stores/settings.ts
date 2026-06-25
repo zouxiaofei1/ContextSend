@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart'
 import type { Locale } from '../i18n'
 
 /** 预设主题色，包括 hex 值和对应的 hover 变体。 */
@@ -24,6 +26,12 @@ interface SettingsData {
   accentColor: string
   locale: Locale
   minimizeToTray: boolean
+  autoStart: boolean
+  showAdvanced: boolean
+  alwaysOnTop: boolean
+  startMinimized: boolean
+  customPort: number
+  connectionTimeout: number
 }
 
 function loadSettings(): SettingsData {
@@ -36,6 +44,13 @@ function loadSettings(): SettingsData {
         accentColor: parsed.accentColor || '#4C7CF3',
         locale: parsed.locale === 'en-US' ? 'en-US' : 'zh-CN',
         minimizeToTray: parsed.minimizeToTray !== false,
+        autoStart: parsed.autoStart === true,
+        showAdvanced: parsed.showAdvanced === true,
+        alwaysOnTop: parsed.alwaysOnTop === true,
+        startMinimized: parsed.startMinimized === true,
+        customPort: typeof parsed.customPort === 'number' ? parsed.customPort : 0,
+        connectionTimeout:
+          typeof parsed.connectionTimeout === 'number' ? parsed.connectionTimeout : 30,
       }
     }
   } catch {
@@ -46,6 +61,12 @@ function loadSettings(): SettingsData {
     accentColor: '#4C7CF3',
     locale: 'zh-CN',
     minimizeToTray: true,
+    autoStart: false,
+    showAdvanced: false,
+    alwaysOnTop: false,
+    startMinimized: false,
+    customPort: 0,
+    connectionTimeout: 30,
   }
 }
 
@@ -61,16 +82,18 @@ export const useSettingsStore = defineStore('settings', () => {
   const locale = ref<Locale>(initial.locale)
   const minimizeToTray = ref<boolean>(initial.minimizeToTray)
   const autoStart = ref<boolean>(initial.autoStart)
+  const showAdvanced = ref<boolean>(initial.showAdvanced)
+  const alwaysOnTop = ref<boolean>(initial.alwaysOnTop)
+  const startMinimized = ref<boolean>(initial.startMinimized)
+  const customPort = ref<number>(initial.customPort)
+  const connectionTimeout = ref<number>(initial.connectionTimeout)
 
   /** 将 CSS 变量和 data-theme 应用至 DOM。 */
   function applyTheme(): void {
     document.documentElement.setAttribute('data-theme', theme.value)
     document.documentElement.style.setProperty('--accent', accentColor.value)
     const entry = ACCENT_COLORS.find((c) => c.hex === accentColor.value)
-    document.documentElement.style.setProperty(
-      '--accent-hover',
-      entry?.hover || accentColor.value,
-    )
+    document.documentElement.style.setProperty('--accent-hover', entry?.hover || accentColor.value)
   }
 
   /** 将 minimizeToTray 和 autoStart 同步到 Rust 后端。 */
@@ -115,11 +138,70 @@ export const useSettingsStore = defineStore('settings', () => {
     await syncBackend()
   }
 
+  function toggleShowAdvanced(): void {
+    showAdvanced.value = !showAdvanced.value
+  }
+
+  function toggleAlwaysOnTop(): void {
+    alwaysOnTop.value = !alwaysOnTop.value
+    getCurrentWindow()
+      .setAlwaysOnTop(alwaysOnTop.value)
+      .catch(() => {})
+  }
+
+  function toggleStartMinimized(): void {
+    startMinimized.value = !startMinimized.value
+  }
+
+  function setCustomPort(port: number): void {
+    if (!Number.isFinite(port) || port < 0) {
+      customPort.value = 0
+    } else if (port > 65535) {
+      customPort.value = 65535
+    } else {
+      customPort.value = Math.round(port)
+    }
+    invoke('set_network_port', { port: customPort.value }).catch(() => {})
+  }
+
+  function setConnectionTimeout(sec: number): void {
+    if (!Number.isFinite(sec) || sec < 1) {
+      connectionTimeout.value = 1
+    } else if (sec > 300) {
+      connectionTimeout.value = 300
+    } else {
+      connectionTimeout.value = Math.round(sec)
+    }
+    invoke('set_connection_timeout', { timeoutSecs: connectionTimeout.value }).catch(() => {})
+  }
+
   /** 持久化所有设置到 localStorage，并同步 DOM 主题 + 后端。 */
   watch(
-    [theme, accentColor, locale, minimizeToTray, autoStart],
-    ([t, a, l, m, s]) => {
-      persist({ theme: t, accentColor: a, locale: l, minimizeToTray: m, autoStart: s })
+    [
+      theme,
+      accentColor,
+      locale,
+      minimizeToTray,
+      autoStart,
+      showAdvanced,
+      alwaysOnTop,
+      startMinimized,
+      customPort,
+      connectionTimeout,
+    ],
+    ([t, a, l, m, s, adv, atop, sm, port, timeout]) => {
+      persist({
+        theme: t,
+        accentColor: a,
+        locale: l,
+        minimizeToTray: m,
+        autoStart: s,
+        showAdvanced: adv,
+        alwaysOnTop: atop,
+        startMinimized: sm,
+        customPort: port,
+        connectionTimeout: timeout,
+      })
       applyTheme()
     },
     { immediate: false },
@@ -136,12 +218,22 @@ export const useSettingsStore = defineStore('settings', () => {
     locale,
     minimizeToTray,
     autoStart,
+    showAdvanced,
+    alwaysOnTop,
+    startMinimized,
+    customPort,
+    connectionTimeout,
     applyTheme,
     toggleTheme,
     setAccentColor,
     setLocale,
     toggleMinimizeToTray,
     toggleAutoStart,
+    toggleShowAdvanced,
+    toggleAlwaysOnTop,
+    toggleStartMinimized,
+    setCustomPort,
+    setConnectionTimeout,
     syncBackend,
   }
 })

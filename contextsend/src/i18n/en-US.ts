@@ -39,7 +39,8 @@ export default {
     setPushSource: 'Set as push source',
     importToJan: 'Import to Jan',
     importToChatBox: 'Import to ChatBox',
-    captureHint: 'Tip: paste or drop a context snippet anywhere in the window to auto-match and add it',
+    captureHint:
+      'Tip: paste or drop a context snippet anywhere in the window to auto-match and add it',
     localSnippet: 'Local snippet',
     matchFound: 'Matched a conversation in {app} and added to the library',
     matchNone: 'No match found; added the snippet to the library',
@@ -57,8 +58,7 @@ export default {
     more: 'More',
     setPermission: 'Set Permission',
     pairingTitle: 'Pairing Code (verify with peer)',
-    pairingHint:
-      'Both sides must show the same code to prevent MITM attacks.',
+    pairingHint: 'Both sides must show the same code to prevent MITM attacks.',
     pairingConfirm: 'Match — Push Current Conversation',
     accept: 'Match — Accept',
     reject: 'Reject',
@@ -97,6 +97,17 @@ export default {
     version: 'Version',
     platform: 'Platform',
     adapters: 'Adapters',
+    advanced: {
+      label: 'Advanced',
+      title: 'Advanced Settings',
+      port: 'Custom network port',
+      portPlaceholder: 'Default port',
+      timeout: 'Connection timeout',
+      timeoutPlaceholder: '30',
+      seconds: 's',
+      alwaysOnTop: 'Always on top',
+      startMinimized: 'Start minimized to tray',
+    },
   },
   common: {
     error: 'Error',

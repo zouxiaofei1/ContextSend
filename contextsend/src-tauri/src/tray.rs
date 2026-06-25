@@ -104,9 +104,7 @@ pub fn update_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         }
         for (id, name) in &online_devices {
             let item_id = format!("tray_dev_{}", id);
-            if let Ok(item) =
-                MenuItem::with_id(app, item_id, name.as_str(), false, None::<&str>)
-            {
+            if let Ok(item) = MenuItem::with_id(app, item_id, name.as_str(), false, None::<&str>) {
                 items.push(Box::new(item));
             }
         }
@@ -134,8 +132,7 @@ pub fn update_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         items.push(Box::new(item));
     }
 
-    let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> =
-        items.iter().map(|b| b.as_ref()).collect();
+    let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = items.iter().map(|b| b.as_ref()).collect();
     if let Ok(menu) = Menu::with_items(app, &refs) {
         let _ = tray.set_menu(Some(menu));
     }

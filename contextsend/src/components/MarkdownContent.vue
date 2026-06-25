@@ -22,10 +22,7 @@ const parts = computed<ContentPart[]>(() => {
   const c = props.content
   if (typeof c === 'string') return [{ type: 'text', text: c }]
   if (Array.isArray(c)) {
-    return c.filter(
-      (p): p is ContentPart =>
-        !!p && (p.type === 'text' || p.type === 'image_url'),
-    )
+    return c.filter((p): p is ContentPart => !!p && (p.type === 'text' || p.type === 'image_url'))
   }
   return [{ type: 'text', text: '[不支持的内容]' }]
 })

@@ -109,11 +109,7 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
             :value="settings.accentColor"
             @change="onColorSelect(($event.target as HTMLSelectElement).value)"
           >
-            <option
-              v-for="color in ACCENT_COLORS"
-              :key="color.hex"
-              :value="color.hex"
-            >
+            <option v-for="color in ACCENT_COLORS" :key="color.hex" :value="color.hex">
               {{ color.name }}
             </option>
           </select>
@@ -126,16 +122,8 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
           <span>{{ t('settings.language') }}</span>
         </div>
         <div class="setting-row__control">
-          <select
-            class="locale-select"
-            :value="settings.locale"
-            @change="onLocaleChange"
-          >
-            <option
-              v-for="opt in localeOptions"
-              :key="opt.value"
-              :value="opt.value"
-            >
+          <select class="locale-select" :value="settings.locale" @change="onLocaleChange">
+            <option v-for="opt in localeOptions" :key="opt.value" :value="opt.value">
               {{ opt.label }}
             </option>
           </select>
@@ -197,15 +185,106 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
           </button>
         </div>
       </div>
+
+      <!-- 高级设置开关 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.label') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <label class="toggle">
+            <input
+              type="checkbox"
+              :checked="settings.showAdvanced"
+              @change="settings.toggleShowAdvanced()"
+            />
+            <span class="toggle__slider" />
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- 高级设置 -->
+    <section v-if="settings.showAdvanced" class="settings-section">
+      <h2>{{ t('settings.advanced.title') }}</h2>
+
+      <!-- 自定义网络端口 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.port') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <input
+            type="number"
+            class="number-input"
+            :value="settings.customPort === 0 ? '' : settings.customPort"
+            :placeholder="t('settings.advanced.portPlaceholder')"
+            min="1024"
+            max="65535"
+            @change="settings.setCustomPort(Number(($event.target as HTMLInputElement).value))"
+          />
+        </div>
+      </div>
+
+      <!-- 连接超时 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.timeout') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <input
+            type="number"
+            class="number-input"
+            :value="settings.connectionTimeout"
+            :placeholder="t('settings.advanced.timeoutPlaceholder')"
+            min="1"
+            max="300"
+            @change="
+              settings.setConnectionTimeout(Number(($event.target as HTMLInputElement).value))
+            "
+          />
+          <span class="muted unit">{{ t('settings.advanced.seconds') }}</span>
+        </div>
+      </div>
+
+      <!-- 窗口置顶 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.alwaysOnTop') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <label class="toggle">
+            <input
+              type="checkbox"
+              :checked="settings.alwaysOnTop"
+              @change="settings.toggleAlwaysOnTop()"
+            />
+            <span class="toggle__slider" />
+          </label>
+        </div>
+      </div>
+
+      <!-- 启动时最小化到托盘 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.startMinimized') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <label class="toggle">
+            <input
+              type="checkbox"
+              :checked="settings.startMinimized"
+              @change="settings.toggleStartMinimized()"
+            />
+            <span class="toggle__slider" />
+          </label>
+        </div>
+      </div>
     </section>
 
     <!-- 关于 -->
     <section v-if="app.info" class="about-section">
-      <img
-        :src="appIcon"
-        alt="ContextSend"
-        class="about-icon"
-      />
+      <img :src="appIcon" alt="ContextSend" class="about-icon" />
       <h1 class="about-title">ContextSend</h1>
       <div class="about-meta">
         <a class="about-link" @click.prevent="openGitHub">GitHub</a>
@@ -297,6 +376,16 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
   font-size: 1.1rem;
   line-height: 1;
   padding: 0.15rem 0.4rem;
+}
+
+.number-input {
+  width: 100px;
+  text-align: right;
+}
+
+.unit {
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 /* ===== 关于区域 ===== */

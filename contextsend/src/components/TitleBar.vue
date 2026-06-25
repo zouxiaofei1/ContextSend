@@ -53,15 +53,35 @@ function close(): void {
 
       <button class="titlebar__btn" :title="t('titlebar.maximize')" @click="toggleMaximize">
         <svg v-if="!isMaximized" width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1" />
+          <rect
+            x="1.5"
+            y="1.5"
+            width="8"
+            height="8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          />
         </svg>
         <svg v-else width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
-          <rect x="1.5" y="3" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1" />
+          <rect
+            x="1.5"
+            y="3"
+            width="6"
+            height="6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          />
           <path d="M3.5 3V1.5H9.5V7.5H8" fill="none" stroke="currentColor" stroke-width="1" />
         </svg>
       </button>
 
-      <button class="titlebar__btn titlebar__btn--close" :title="t('titlebar.close')" @click="close">
+      <button
+        class="titlebar__btn titlebar__btn--close"
+        :title="t('titlebar.close')"
+        @click="close"
+      >
         <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
           <path d="M1.5 1.5L9.5 9.5M9.5 1.5L1.5 9.5" stroke="currentColor" stroke-width="1.1" />
         </svg>
@@ -115,7 +135,9 @@ function close(): void {
   padding: 0;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .titlebar__btn:hover {

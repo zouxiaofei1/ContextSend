@@ -96,6 +96,17 @@ export default {
     version: '版本',
     platform: '平台',
     adapters: '适配器',
+    advanced: {
+      label: '高级设置',
+      title: '高级设置',
+      port: '自定义网络端口',
+      portPlaceholder: '默认端口',
+      timeout: '连接超时',
+      timeoutPlaceholder: '30',
+      seconds: '秒',
+      alwaysOnTop: '窗口置顶',
+      startMinimized: '启动时最小化到托盘',
+    },
   },
   common: {
     error: '错误',
