@@ -1,13 +1,16 @@
 //! 系统托盘装配。
 //!
-//! 提供托盘图标、右键菜单（显示窗口 / 退出），以及左键点击切换主窗口显隐。
-//! 同时支持动态更新托盘菜单以展示当前在线设备列表。
+//! 提供托盘图标、右键菜单（展示在线设备 / 开机自启 / 显示窗口 / 退出），
+//! 以及左键点击切换主窗口显隐。
+//! 菜单会在设备变化或开机自启切换时动态重建。
 
+use crate::commands::AppState;
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+use tauri_plugin_autostart::ManagerExt as _;
 
 /// 在应用启动时创建并注册系统托盘。
 pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
@@ -23,6 +26,21 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_and_focus(app),
             "quit" => app.exit(0),
+            "toggle_autostart" => {
+                // 切换开机自启并刷新菜单
+                let mgr = app.autolaunch();
+                let current = mgr.is_enabled().unwrap_or(false);
+                if current {
+                    let _ = mgr.disable();
+                } else {
+                    let _ = mgr.enable();
+                }
+                // 同步 AppState
+                if let Some(state) = app.try_state::<AppState>() {
+                    *state.auto_start.lock().unwrap() = !current;
+                }
+                update_menu(app);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -48,16 +66,22 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// 动态更新托盘菜单以展示当前在线设备。
+/// 动态重建托盘菜单。
 ///
-/// `online_devices` 为 `(id, name)` 列表，仅包含在线设备。
-/// 会在 tooltip 中显示在线数量，并在菜单中以 disabled 项罗列设备名。
-pub fn update_menu<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    online_devices: &[(String, String)],
-) {
+/// 从 [`AppState`] 读取在线设备列表与开机自启状态，
+/// 构建完整菜单并替换当前菜单。
+pub fn update_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let Some(tray) = app.tray_by_id("main-tray") else {
         return;
+    };
+
+    let (auto_start, online_devices) = {
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        let auto = *state.auto_start.lock().unwrap();
+        let devices = state.online_devices.lock().unwrap().clone();
+        (auto, devices)
     };
 
     let count = online_devices.len();
@@ -68,34 +92,50 @@ pub fn update_menu<R: tauri::Runtime>(
     };
     let _ = tray.set_tooltip(Some(&tooltip));
 
-    // 收集菜单项：先放设备名（disabled），再放「显示窗口」「退出」
-    let mut items: Vec<MenuItem<R>> = Vec::new();
+    let mut items: Vec<Box<dyn tauri::menu::IsMenuItem<R>>> = Vec::new();
 
+    // 在线设备（disabled 展示项）
     if count > 0 {
         let header = format!("在线设备 ({})", count);
         if let Ok(item) =
             MenuItem::with_id(app, "tray_devices_header", &header, false, None::<&str>)
         {
-            items.push(item);
+            items.push(Box::new(item));
         }
-        for (id, name) in online_devices {
+        for (id, name) in &online_devices {
             let item_id = format!("tray_dev_{}", id);
-            if let Ok(item) = MenuItem::with_id(app, item_id, name.as_str(), false, None::<&str>)
+            if let Ok(item) =
+                MenuItem::with_id(app, item_id, name.as_str(), false, None::<&str>)
             {
-                items.push(item);
+                items.push(Box::new(item));
             }
         }
     }
 
-    if let Ok(show) = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>) {
-        items.push(show);
+    // 开机自启（可切换 CheckMenuItem）
+    if let Ok(item) = CheckMenuItem::with_id(
+        app,
+        "toggle_autostart",
+        "开机自启",
+        true,
+        auto_start,
+        None::<&str>,
+    ) {
+        items.push(Box::new(item));
     }
-    if let Ok(quit) = MenuItem::with_id(app, "quit", "退出", true, None::<&str>) {
-        items.push(quit);
+
+    // 显示窗口
+    if let Ok(item) = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>) {
+        items.push(Box::new(item));
+    }
+
+    // 退出
+    if let Ok(item) = MenuItem::with_id(app, "quit", "退出", true, None::<&str>) {
+        items.push(Box::new(item));
     }
 
     let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> =
-        items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<R>).collect();
+        items.iter().map(|b| b.as_ref()).collect();
     if let Ok(menu) = Menu::with_items(app, &refs) {
         let _ = tray.set_menu(Some(menu));
     }

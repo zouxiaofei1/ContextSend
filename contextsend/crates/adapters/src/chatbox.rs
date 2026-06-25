@@ -257,7 +257,12 @@ fn build_import_script(session_id: &str, payload: &Value) -> String {
 /// 前置条件：ChatBox 已带 `--remote-debugging-port=9222` 启动。端口不可达时返回
 /// 明确错误，提示用户用带该 flag 的方式启动 ChatBox（单实例锁下需先完全退出再启动）。
 pub async fn import_to_chatbox(convo: &Conversation) -> Result<String, AdapterError> {
+    log::debug!(
+        "ChatBox 导入开始: messages={} (CDP 端口 {DEBUG_PORT})",
+        convo.messages.len()
+    );
     if !debugger_ready().await {
+        log::warn!("ChatBox 调试端口 {DEBUG_PORT} 不可达，导入中止");
         return Err(AdapterError::ChatBox(format!(
             "ChatBox 调试端口 {DEBUG_PORT} 不可达。请先完全退出 ChatBox，再以 \
              `--remote-debugging-port={DEBUG_PORT}` 启动后重试。"
@@ -293,6 +298,7 @@ pub async fn import_to_chatbox(convo: &Conversation) -> Result<String, AdapterEr
     // 给重载留一点时间（best-effort，不影响返回）。
     tokio::time::sleep(Duration::from_millis(50)).await;
 
+    log::info!("ChatBox 导入完成: session_id={session_id}");
     Ok(session_id)
 }
 
@@ -420,6 +426,7 @@ fn sessions_json_to_conversations(value: &Value) -> Vec<Conversation> {
 /// 返回 [`AdapterError::ChatBox`]，由调用方决定是否忽略（匹配遍历会跳过失败的适配器）。
 pub async fn list_chatbox_conversations() -> Result<Vec<Conversation>, AdapterError> {
     if !debugger_ready().await {
+        log::debug!("ChatBox 调试端口 {DEBUG_PORT} 不可达，跳过读取");
         return Err(AdapterError::ChatBox(format!(
             "ChatBox 调试端口 {DEBUG_PORT} 不可达（读取需 ChatBox 带 \
              `--remote-debugging-port={DEBUG_PORT}` 运行）。"
@@ -427,7 +434,9 @@ pub async fn list_chatbox_conversations() -> Result<Vec<Conversation>, AdapterEr
     }
     let ws_url = page_target_ws().await?;
     let result = cdp_evaluate(&ws_url, READ_SCRIPT, true).await?;
-    Ok(sessions_json_to_conversations(&result))
+    let convos = sessions_json_to_conversations(&result);
+    log::debug!("ChatBox 读取完成: 共 {} 个会话(话题)", convos.len());
+    Ok(convos)
 }
 
 #[cfg(test)]

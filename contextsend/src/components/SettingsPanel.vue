@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useAppStore } from '../stores/app'
+import { useToastStore } from '../stores/toast'
 import { useSettingsStore, ACCENT_COLORS } from '../stores/settings'
 import { SUPPORTED_LOCALES } from '../i18n'
 import type { Locale } from '../i18n'
@@ -9,6 +10,7 @@ import { generateRandomName } from '../utils/nameGenerator'
 import appIcon from '../assets/app-icon.png'
 
 const app = useAppStore()
+const toast = useToastStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
 
@@ -35,7 +37,7 @@ async function onRenameBlur(): Promise<void> {
 
 async function applyRename(name: string): Promise<void> {
   await app.renameSelf(name)
-  app.status = t('common.renameSuccess')
+  toast.success(t('common.renameSuccess'))
 }
 
 function onRandomName(): void {

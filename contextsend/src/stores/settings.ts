@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart'
 import type { Locale } from '../i18n'
 
 /** 预设主题色，包括 hex 值和对应的 hover 变体。 */
@@ -25,7 +24,6 @@ interface SettingsData {
   accentColor: string
   locale: Locale
   minimizeToTray: boolean
-  autoStart: boolean
 }
 
 function loadSettings(): SettingsData {
@@ -38,7 +36,6 @@ function loadSettings(): SettingsData {
         accentColor: parsed.accentColor || '#4C7CF3',
         locale: parsed.locale === 'en-US' ? 'en-US' : 'zh-CN',
         minimizeToTray: parsed.minimizeToTray !== false,
-        autoStart: parsed.autoStart === true,
       }
     }
   } catch {
@@ -49,7 +46,6 @@ function loadSettings(): SettingsData {
     accentColor: '#4C7CF3',
     locale: 'zh-CN',
     minimizeToTray: true,
-    autoStart: false,
   }
 }
 

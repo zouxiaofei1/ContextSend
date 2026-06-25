@@ -12,12 +12,14 @@ use std::sync::Mutex;
 use commands::AppState;
 use cs_network::{DeviceIdentity, NetEvent, NetworkService};
 use tauri::{Emitter, Manager, WindowEvent};
+use tauri_plugin_autostart::ManagerExt as _;
 use tokio::sync::OnceCell;
 
 /// 应用主入口，由 `main.rs`（桌面）调用。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(build_log_plugin())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -37,6 +39,15 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let identity_path = dir.join("identity.json");
             let identity = DeviceIdentity::load_or_create(&identity_path)?;
+            log::info!(
+                "本机身份就绪: name={} uuid={} data_dir={}",
+                identity.name,
+                identity.uuid,
+                dir.display()
+            );
+
+            // 读取当前开机自启状态（OS 级）。
+            let auto_start = app.autolaunch().is_enabled().unwrap_or(false);
 
             // 先注册状态（网络服务尚未就绪），让窗口与前端不被网络初始化阻塞。
             app.manage(AppState {
@@ -44,6 +55,8 @@ pub fn run() {
                 identity_path,
                 identity: Mutex::new(identity.clone()),
                 minimize_to_tray: Mutex::new(true),
+                auto_start: Mutex::new(auto_start),
+                online_devices: Mutex::new(Vec::new()),
             });
 
             // 后台异步启动网络服务：就绪后填充 service 并广播事件，
@@ -52,7 +65,8 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 match NetworkService::start(identity).await {
                     Ok((service, mut events_rx)) => {
-                        // 转发网络事件到前端，同时同步更新托盘设备列表。
+                        log::info!("网络服务已启动，开始监听 mDNS 与入站连接");
+                        // 转发网络事件到前端，同时同步更新 AppState 与托盘菜单。
                         let emit_handle = handle.clone();
                         let tray_handle = handle.clone();
                         tauri::async_runtime::spawn(async move {
@@ -84,7 +98,14 @@ pub fn run() {
                                             (id.clone(), name.clone())
                                         })
                                         .collect();
-                                    tray::update_menu(&tray_handle, &snapshot);
+                                    // 写入 AppState 供托盘菜单读取
+                                    if let Some(state) =
+                                        tray_handle.try_state::<AppState>()
+                                    {
+                                        *state.online_devices.lock().unwrap() =
+                                            snapshot;
+                                    }
+                                    tray::update_menu(&tray_handle);
                                 }
                                 let _ = emit_handle.emit("net-event", event);
                             }
@@ -93,6 +114,7 @@ pub fn run() {
                         let _ = handle.emit("net-ready", ());
                     }
                     Err(e) => {
+                        log::error!("网络服务启动失败: {e}");
                         let _ = handle.emit("net-error", e.to_string());
                     }
                 }
@@ -133,4 +155,36 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("启动 ContextSend 失败");
+}
+
+/// 构造日志插件：同时输出到终端(开发)与日志文件(`app_log_dir/ContextSend.log`)。
+///
+/// 级别策略：本应用各 crate（`contextsend_lib` / `cs_network` / `cs_adapters` /
+/// `cs_core`）默认 `Debug`，第三方依赖（mDNS、tungstenite 等）压到 `Warn`，
+/// 避免底层库刷屏淹没业务日志。隐私：业务埋点只记元信息（条数/字节/耗时/设备名/
+/// 应用名/UUID），不记录对话正文与配对码。
+fn build_log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
+
+    tauri_plugin_log::Builder::new()
+        // 时间戳用本地时区（默认是 UTC，会与本地时间差几个小时）。
+        .timezone_strategy(TimezoneStrategy::UseLocal)
+        .targets([
+            // 终端输出：开发期实时查看。
+            Target::new(TargetKind::Stdout),
+            // 文件输出：滚动写入 app 日志目录，便于事后排查（双机调试时各实例独立）。
+            Target::new(TargetKind::LogDir {
+                file_name: Some("ContextSend".into()),
+            }),
+        ])
+        // 全局默认 Info；本项目 crate 提到 Debug；噪声大的底层库压到 Warn。
+        .level(log::LevelFilter::Info)
+        .level_for("contextsend_lib", log::LevelFilter::Debug)
+        .level_for("cs_network", log::LevelFilter::Debug)
+        .level_for("cs_adapters", log::LevelFilter::Debug)
+        .level_for("cs_core", log::LevelFilter::Debug)
+        .level_for("mdns_sd", log::LevelFilter::Warn)
+        .level_for("tungstenite", log::LevelFilter::Warn)
+        .level_for("tokio_tungstenite", log::LevelFilter::Warn)
+        .build()
 }

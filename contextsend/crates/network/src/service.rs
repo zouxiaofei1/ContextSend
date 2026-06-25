@@ -81,6 +81,7 @@ impl NetworkService {
             .local_addr()
             .map_err(|e| NetworkError::Io(e.to_string()))?
             .port();
+        log::info!("TCP 监听已绑定: 0.0.0.0:{port}");
 
         let (events_tx, events_rx) = unbounded_channel();
         let inner = Arc::new(Inner {
@@ -100,6 +101,7 @@ impl NetworkService {
                 while let Some(event) = disc_rx.recv().await {
                     match event {
                         DiscoveryEvent::Found(dev) => {
+                            log::debug!("发现设备: name={} uuid={}", dev.name, dev.uuid);
                             inner
                                 .devices
                                 .lock()
@@ -112,6 +114,7 @@ impl NetworkService {
                             }));
                         }
                         DiscoveryEvent::Lost { uuid } => {
+                            log::debug!("设备失联: uuid={uuid}");
                             inner.devices.lock().unwrap().remove(&uuid);
                             let _ = inner.events.send(NetEvent::DeviceLost { uuid });
                         }
@@ -133,6 +136,7 @@ impl NetworkService {
                         Ok(v) => v,
                         Err(_) => continue,
                     };
+                    log::debug!("接受入站连接: peer={_peer}");
                     let inner = Arc::clone(&inner);
                     let local = local.clone();
                     tokio::spawn(async move {
@@ -142,6 +146,9 @@ impl NetworkService {
                                 let peer_uuid = session.peer.uuid.clone();
                                 let peer_name = session.peer.name.clone();
                                 let pin = session.pin.clone();
+                                log::info!(
+                                    "入站握手完成，待用户确认: pairing_id={pairing_id} peer={peer_name}({peer_uuid})"
+                                );
                                 inner.pending.lock().unwrap().insert(pairing_id, session);
                                 let _ = inner.events.send(NetEvent::IncomingPairing {
                                     pairing_id,
@@ -151,6 +158,7 @@ impl NetworkService {
                                 });
                             }
                             Err(e) => {
+                                log::warn!("入站握手失败: {e}");
                                 let _ = inner.events.send(NetEvent::Failed {
                                     pairing_id: 0,
                                     reason: e.to_string(),
@@ -208,6 +216,7 @@ impl NetworkService {
         let mut last_err = NetworkError::Protocol("目标设备没有可用地址".into());
         let mut stream = None;
         for addr in &addrs {
+            log::debug!("尝试连接目标地址: {addr}");
             match tokio::time::timeout(
                 std::time::Duration::from_secs(3),
                 TcpStream::connect(addr),
@@ -215,11 +224,18 @@ impl NetworkService {
             .await
             {
                 Ok(Ok(s)) => {
+                    log::debug!("已连接目标地址: {addr}");
                     stream = Some(s);
                     break;
                 }
-                Ok(Err(e)) => last_err = NetworkError::Io(format!("{addr} 连接失败: {e}")),
-                Err(_) => last_err = NetworkError::Io(format!("{addr} 连接超时")),
+                Ok(Err(e)) => {
+                    log::debug!("{addr} 连接失败: {e}");
+                    last_err = NetworkError::Io(format!("{addr} 连接失败: {e}"));
+                }
+                Err(_) => {
+                    log::debug!("{addr} 连接超时");
+                    last_err = NetworkError::Io(format!("{addr} 连接超时"));
+                }
             }
         }
         let stream = stream.ok_or(last_err)?;
@@ -231,6 +247,11 @@ impl NetworkService {
         let session = handshake(stream, &local).await?;
         let pin = session.pin.clone();
         let pairing_id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);
+        log::info!(
+            "主动握手完成: pairing_id={pairing_id} peer={}({})",
+            session.peer.name,
+            session.peer.uuid
+        );
         self.inner
             .pending
             .lock()
@@ -246,9 +267,12 @@ impl NetworkService {
         conversation: &Conversation,
     ) -> Result<(), NetworkError> {
         let mut session = self.take_pending(pairing_id)?;
+        let msg_count = conversation.messages.len();
+        log::debug!("开始推送对话: pairing_id={pairing_id} messages={msg_count}");
         session.send_conversation(conversation).await?;
         // 等待对端 Ack（尽力而为）。
         let _ = session.recv().await;
+        log::debug!("对话已发送并等待 Ack 完成: pairing_id={pairing_id} messages={msg_count}");
         Ok(())
     }
 
@@ -260,6 +284,10 @@ impl NetworkService {
         match session.recv().await? {
             AppMessage::PushConversation(conversation) => {
                 let _ = session.send(&AppMessage::Ack).await;
+                log::info!(
+                    "收到对话: from={from_name}({from_uuid}) messages={}",
+                    conversation.messages.len()
+                );
                 let _ = self.inner.events.send(NetEvent::ConversationReceived {
                     from_uuid,
                     from_name,

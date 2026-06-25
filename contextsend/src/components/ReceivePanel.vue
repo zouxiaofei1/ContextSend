@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAppStore, type ConversationSegment } from '../stores/app'
+import { useToastStore } from '../stores/toast'
 import { useI18n } from 'vue-i18n'
 import MarkdownContent from './MarkdownContent.vue'
 
 const app = useAppStore()
+const toast = useToastStore()
 const { t } = useI18n()
 
 const importText = ref('')
@@ -56,9 +58,9 @@ async function onImport(): Promise<void> {
     const conv = await app.importOpenai(importText.value)
     app.addSegment(t('receive.localImport'), conv, true)
     importText.value = ''
-    app.status = t('receive.importSuccess', { count: conv.messages.length })
+    toast.success(t('receive.importSuccess', { count: conv.messages.length }))
   } catch (e) {
-    app.error = String(e)
+    toast.error(String(e))
   }
 }
 
@@ -67,19 +69,15 @@ async function onExport(): Promise<void> {
   if (!seg) return
   try {
     exportText.value = await app.exportOpenai(seg.conversation)
-    app.status = t('receive.exportReady')
+    toast.success(t('receive.exportReady'))
   } catch (e) {
-    app.error = String(e)
+    toast.error(String(e))
   }
 }
 </script>
 
 <template>
   <div class="panel">
-    <!-- 通知区 -->
-    <div v-if="app.error" class="banner banner--error">{{ app.error }}</div>
-    <div v-if="app.status" class="banner banner--status">{{ app.status }}</div>
-
     <!-- 顶部操作条 -->
     <div class="toolbar">
       <h2>{{ t('receive.title') }}</h2>

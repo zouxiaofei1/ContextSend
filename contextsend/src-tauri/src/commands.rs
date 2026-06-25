@@ -21,6 +21,10 @@ pub struct AppState {
     pub identity: Mutex<DeviceIdentity>,
     /// 关闭窗口时是否最小化到托盘（默认 true）。
     pub minimize_to_tray: Mutex<bool>,
+    /// 是否开机自启（由托盘菜单管理）。
+    pub auto_start: Mutex<bool>,
+    /// 当前在线设备快照 `(id, name)`，供托盘菜单使用。
+    pub online_devices: Mutex<Vec<(String, String)>>,
 }
 
 impl AppState {
@@ -103,12 +107,23 @@ pub async fn connect_pair(
     state: State<'_, AppState>,
     target_uuid: String,
 ) -> Result<PairingStarted, String> {
-    let (pairing_id, pin) = state
+    log::info!("发起配对: target_uuid={target_uuid}");
+    let started = state
         .service()?
         .connect_pair(&target_uuid)
         .await
-        .map_err(|e| e.to_string())?;
-    Ok(PairingStarted { pairing_id, pin })
+        .map_err(|e| {
+            log::warn!("发起配对失败: target_uuid={target_uuid} err={e}");
+            e.to_string()
+        })?;
+    log::info!(
+        "配对已建立(待用户确认配对码): pairing_id={} target_uuid={target_uuid}",
+        started.0
+    );
+    Ok(PairingStarted {
+        pairing_id: started.0,
+        pin: started.1,
+    })
 }
 
 /// 用户确认配对码一致后，推送一段对话。
@@ -118,26 +133,41 @@ pub async fn push_conversation(
     pairing_id: u64,
     conversation: Conversation,
 ) -> Result<(), String> {
+    log::info!(
+        "推送对话: pairing_id={pairing_id} messages={} title={:?}",
+        conversation.messages.len(),
+        conversation.title
+    );
     state
         .service()?
         .push(pairing_id, &conversation)
         .await
-        .map_err(|e| e.to_string())
+        .map(|_| log::info!("推送完成: pairing_id={pairing_id}"))
+        .map_err(|e| {
+            log::warn!("推送失败: pairing_id={pairing_id} err={e}");
+            e.to_string()
+        })
 }
 
 /// 用户确认入站配对码一致后，接收对端推送的对话（结果经 `net-event` 事件抛出）。
 #[tauri::command]
 pub async fn accept_incoming(state: State<'_, AppState>, pairing_id: u64) -> Result<(), String> {
+    log::info!("接受入站对话: pairing_id={pairing_id}");
     state
         .service()?
         .accept_incoming(pairing_id)
         .await
-        .map_err(|e| e.to_string())
+        .map(|_| log::info!("入站对话接收完成: pairing_id={pairing_id}"))
+        .map_err(|e| {
+            log::warn!("接收入站对话失败: pairing_id={pairing_id} err={e}");
+            e.to_string()
+        })
 }
 
 /// 拒绝/取消一个待确认配对。
 #[tauri::command]
 pub fn reject_pairing(state: State<'_, AppState>, pairing_id: u64) {
+    log::info!("拒绝/取消配对: pairing_id={pairing_id}");
     if let Some(s) = state.service.get() {
         s.reject(pairing_id);
     }
@@ -173,9 +203,17 @@ pub async fn import_to_app(
     app: String,
     conversation: Conversation,
 ) -> Result<ImportResult, String> {
+    log::info!(
+        "导入到本地应用: app={app} messages={}",
+        conversation.messages.len()
+    );
     let thread_id = cs_adapters::import_conversation_to(&app, &conversation)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::warn!("导入失败: app={app} err={e}");
+            e.to_string()
+        })?;
+    log::info!("导入完成: app={app} thread_id={thread_id}");
     Ok(ImportResult { app, thread_id })
 }
 
@@ -197,17 +235,25 @@ pub struct MatchOutcome {
 /// 片段过短会返回错误；命中则返回整条会话，未命中则把片段包成占位会话返回。
 #[tauri::command]
 pub async fn match_context(snippet: String) -> Result<MatchOutcome, String> {
+    log::info!("片段匹配请求: snippet_chars={}", snippet.chars().count());
     match cs_adapters::match_snippet(&snippet)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            log::warn!("片段匹配出错: err={e}");
+            e.to_string()
+        })?
     {
-        Some(m) => Ok(MatchOutcome {
-            matched: true,
-            app: Some(m.app),
-            score: m.score,
-            conversation: m.conversation,
-        }),
+        Some(m) => {
+            log::info!("片段命中: app={} score={:.3}", m.app, m.score);
+            Ok(MatchOutcome {
+                matched: true,
+                app: Some(m.app),
+                score: m.score,
+                conversation: m.conversation,
+            })
+        }
         None => {
+            log::info!("片段未命中，已包成占位会话返回");
             // 未匹配到：把片段本身作为一段独立会话，仍纳入存储库。
             let mut conversation = Conversation::new();
             conversation.messages.push(ChatMessage::user(snippet));

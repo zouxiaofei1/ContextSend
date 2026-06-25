@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { load, type Store } from '@tauri-apps/plugin-store'
+import { useToastStore } from './toast'
 
 /** 与 Rust 端 `commands::AppInfo` 对应的应用信息。 */
 export interface AppInfo {
@@ -108,9 +109,10 @@ export const useAppStore = defineStore('app', () => {
   const segments = ref<ConversationSegment[]>([])
   /** 配对推送时选用的段 id（默认最新段）。 */
   const selectedSegmentId = ref<string | null>(null)
-  const status = ref<string>('')
-  const error = ref<string | null>(null)
   const loading = ref(false)
+
+  /** 全局通知队列，用户可见的成功/错误提示统一走 toast。 */
+  const toast = useToastStore()
 
   /** 各设备权限等级（本地、非对称），按 device uuid 索引；未记录的默认 Level 0。 */
   const permissions = ref<Record<string, PermissionLevel>>({})
@@ -194,7 +196,6 @@ export const useAppStore = defineStore('app', () => {
   /** 初始化：拉取应用信息、身份、设备列表，并订阅后端事件。 */
   async function init(): Promise<void> {
     loading.value = true
-    error.value = null
     try {
       // 先订阅事件，避免错过网络就绪后立即发现的设备；三个独立查询并行拉取。
       await subscribe()
@@ -209,7 +210,7 @@ export const useAppStore = defineStore('app', () => {
       identity.value = self
       devices.value = devs
     } catch (e) {
-      error.value = String(e)
+      toast.error(String(e))
     } finally {
       loading.value = false
     }
@@ -254,7 +255,7 @@ export const useAppStore = defineStore('app', () => {
           if (level === 1) {
             // 已信任：自动接收，不弹窗、不比对 PIN。
             void invoke('accept_incoming', { pairingId: p.pairingId }).catch((e) => {
-              error.value = `接收失败：${String(e)}`
+              toast.error(`接收失败：${String(e)}`)
             })
             break
           }
@@ -270,10 +271,10 @@ export const useAppStore = defineStore('app', () => {
         }
         case 'conversationReceived':
           addSegment(p.fromName, p.conversation, false)
-          status.value = `收到来自「${p.fromName}」的 ${p.conversation.messages.length} 条消息`
+          toast.info(`收到来自「${p.fromName}」的 ${p.conversation.messages.length} 条消息`)
           break
         case 'failed':
-          error.value = `配对失败：${p.reason}`
+          toast.error(`配对失败：${p.reason}`)
           break
       }
     })
@@ -298,7 +299,6 @@ export const useAppStore = defineStore('app', () => {
     conversation: Conversation,
     upgrade = false,
   ): Promise<void> {
-    error.value = null
     try {
       const res = await invoke<{ pairingId: number; pin: string }>('connect_pair', {
         targetUuid,
@@ -306,7 +306,7 @@ export const useAppStore = defineStore('app', () => {
       // 已信任设备的普通推送：无需确认，直接推送（不弹窗、不展示 PIN）。
       if (!upgrade && permissionOf(targetUuid) === 1) {
         await invoke('push_conversation', { pairingId: res.pairingId, conversation })
-        status.value = '已推送当前对话'
+        toast.success('已推送当前对话')
         return
       }
       // Level 0 陌生人（按名确认）或升级到 Level 2（比对 PIN）：弹窗等用户确认。
@@ -319,7 +319,7 @@ export const useAppStore = defineStore('app', () => {
         conversation,
       }
     } catch (e) {
-      error.value = `配对失败：${String(e)}`
+      toast.error(`配对失败：${String(e)}`)
     }
   }
 
@@ -330,9 +330,9 @@ export const useAppStore = defineStore('app', () => {
     try {
       await invoke('push_conversation', { pairingId, conversation })
       if (upgrade) setPermission(targetUuid, 2)
-      status.value = '已推送当前对话'
+      toast.success('已推送当前对话')
     } catch (e) {
-      error.value = `推送失败：${String(e)}`
+      toast.error(`推送失败：${String(e)}`)
     } finally {
       outgoing.value = null
     }
@@ -346,7 +346,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       await invoke('accept_incoming', { pairingId })
     } catch (e) {
-      error.value = `接收失败：${String(e)}`
+      toast.error(`接收失败：${String(e)}`)
     }
   }
 
@@ -358,7 +358,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       await invoke('reject_pairing', { pairingId })
     } catch (e) {
-      error.value = `拒绝失败：${String(e)}`
+      toast.error(`拒绝失败：${String(e)}`)
     }
   }
 
@@ -390,18 +390,18 @@ export const useAppStore = defineStore('app', () => {
    *   `--remote-debugging-port=9222` 启动，否则后端返回提示错误。
    */
   async function importToApp(conversation: Conversation, appName: string): Promise<void> {
-    error.value = null
     try {
       await invoke<{ app: string; threadId: string }>('import_to_app', {
         app: appName,
         conversation,
       })
-      status.value =
+      toast.success(
         appName.toLowerCase() === 'chatbox'
           ? `已写入 ${appName}，侧栏已刷新即可看到新会话`
-          : `已写入 ${appName}，切回 ${appName} 窗口即可看到新会话`
+          : `已写入 ${appName}，切回 ${appName} 窗口即可看到新会话`,
+      )
     } catch (e) {
-      error.value = `导入到 ${appName} 失败：${String(e)}`
+      toast.error(`导入到 ${appName} 失败：${String(e)}`)
     }
   }
 
@@ -472,8 +472,6 @@ export const useAppStore = defineStore('app', () => {
     outgoing,
     segments,
     selectedSegmentId,
-    status,
-    error,
     loading,
     permissions,
     init,

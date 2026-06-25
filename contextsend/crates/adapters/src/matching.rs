@@ -127,6 +127,7 @@ pub async fn match_snippet(snippet: &str) -> Result<Option<ConversationMatch>, A
     if snippet_chars.len() < MIN_SNIPPET_CHARS {
         return Err(AdapterError::SnippetTooShort(MIN_SNIPPET_CHARS));
     }
+    log::debug!("片段匹配开始: 归一化后 {} 字符", snippet_chars.len());
 
     let mut best: Option<ConversationMatch> = None;
 
@@ -137,21 +138,30 @@ pub async fn match_snippet(snippet: &str) -> Result<Option<ConversationMatch>, A
             continue;
         };
         let Ok(convos) = adapter.list_conversations() else {
+            log::debug!("适配器 {name} 不可读，跳过");
             continue; // 未安装 / 不可读 / 未实现的适配器跳过
         };
+        log::debug!("在 {name} 的 {} 个会话中匹配", convos.len());
         if let Some(hit) = match_in_app(name, convos, &norm_snippet, &snippet_chars, &mut best) {
+            log::debug!("片段在 {name} 精确命中");
             return Ok(Some(hit));
         }
     }
 
     // ChatBox：异步 CDP 读取。ChatBox 未带调试端口运行时返回 Err，直接跳过。
     if let Ok(convos) = crate::list_chatbox_conversations().await {
+        log::debug!("在 ChatBox 的 {} 个会话中匹配", convos.len());
         if let Some(hit) = match_in_app("ChatBox", convos, &norm_snippet, &snippet_chars, &mut best)
         {
+            log::debug!("片段在 ChatBox 精确命中");
             return Ok(Some(hit));
         }
     }
 
+    match &best {
+        Some(m) => log::debug!("片段模糊命中: app={} score={:.3}", m.app, m.score),
+        None => log::debug!("片段未命中任何会话"),
+    }
     Ok(best)
 }
 

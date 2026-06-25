@@ -1,18 +1,20 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../stores/app'
+import { useToastStore } from '../stores/toast'
 
 /**
  * 全局上下文捕获：在窗口**任意位置**粘贴或拖入一段文本，即自动匹配回本地会话
  * 并加入存储库（导出方向的「自动匹配正确的页面」）。
  *
  * - 焦点在输入框 / 文本域 / 可编辑元素时不拦截，保证正常粘贴/拖放不受影响。
- * - 空白文本忽略；过短片段由后端返回错误并经 `app.error` 提示。
+ * - 空白文本忽略；过短片段由后端返回错误并经 toast 提示。
  *
  * 在 App 根组件挂载一次即可全局生效。
  */
 export function useContextCapture(): void {
   const app = useAppStore()
+  const toast = useToastStore()
   const { t } = useI18n()
 
   /** 目标是否为可编辑元素（此时让浏览器走默认粘贴/拖放，不拦截）。 */
@@ -31,10 +33,13 @@ export function useContextCapture(): void {
       const r = await app.matchContext(snippet)
       const from = r.matched && r.app ? r.app : t('receive.localSnippet')
       app.addSegment(from, r.conversation, true)
-      app.status =
-        r.matched && r.app ? t('receive.matchFound', { app: r.app }) : t('receive.matchNone')
+      if (r.matched && r.app) {
+        toast.success(t('receive.matchFound', { app: r.app }))
+      } else {
+        toast.info(t('receive.matchNone'))
+      }
     } catch (e) {
-      app.error = String(e)
+      toast.error(String(e))
     }
   }
 

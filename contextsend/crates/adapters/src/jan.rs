@@ -144,8 +144,10 @@ impl Adapter for JanAdapter {
     fn list_conversations(&self) -> Result<Vec<Conversation>, AdapterError> {
         let threads_dir = Self::threads_dir().ok_or(AdapterError::AppNotFound)?;
         if !threads_dir.exists() {
+            log::debug!("Jan threads 目录不存在，返回空: {}", threads_dir.display());
             return Ok(Vec::new());
         }
+        log::debug!("Jan 读取会话: dir={}", threads_dir.display());
 
         let mut convos = Vec::new();
         for entry in fs::read_dir(&threads_dir)? {
@@ -195,6 +197,7 @@ impl Adapter for JanAdapter {
             convos.push(convo);
         }
 
+        log::debug!("Jan 读取完成: 共 {} 个会话", convos.len());
         Ok(convos)
     }
 
@@ -243,6 +246,10 @@ impl Adapter for JanAdapter {
             writeln!(file, "{}", serde_json::to_string(&msg_json)?)?;
         }
 
+        log::info!(
+            "Jan 写入会话: thread_id={thread_id} messages={}",
+            convo.messages.len()
+        );
         Ok(thread_id)
     }
 }

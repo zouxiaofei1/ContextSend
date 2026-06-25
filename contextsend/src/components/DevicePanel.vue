@@ -70,10 +70,6 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
 
 <template>
   <div class="panel">
-    <!-- 错误/状态 -->
-    <div v-if="app.error" class="banner banner--error">{{ app.error }}</div>
-    <div v-if="app.status" class="banner banner--status">{{ app.status }}</div>
-
     <!-- 在线设备 -->
     <section class="card">
       <h2>{{ t('device.online') }} ({{ onlineDevices.length }})</h2>

@@ -7,6 +7,7 @@ import { useContextCapture } from './composables/useContextCapture'
 import AppSidebar from './components/AppSidebar.vue'
 import BottomTabBar from './components/BottomTabBar.vue'
 import TitleBar from './components/TitleBar.vue'
+import ToastHost from './components/ToastHost.vue'
 import ReceivePanel from './components/ReceivePanel.vue'
 import DevicePanel from './components/DevicePanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -40,6 +41,7 @@ function onSelectTab(tab: string): void {
 <template>
   <div class="app-root">
     <TitleBar :portrait="isPortrait" />
+    <ToastHost />
 
     <!-- 横屏布局：左侧边栏 + 右侧内容 -->
     <div v-if="!isPortrait" class="app-layout">

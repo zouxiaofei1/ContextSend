@@ -15,6 +15,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 dirs.workspace = true
+log.workspace = true
 
 # ChatBox 导入（CDP 注入）。
 tokio.workspace = true
