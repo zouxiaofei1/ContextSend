@@ -8,6 +8,11 @@ export default {
     devices: '设备',
     settings: '设置',
   },
+  titlebar: {
+    minimize: '最小化',
+    maximize: '最大化',
+    close: '关闭',
+  },
   receive: {
     title: '当前对话',
     count: '{count} 条消息',

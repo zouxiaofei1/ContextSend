@@ -6,6 +6,7 @@ import { useLayout } from './composables/useLayout'
 import { useContextCapture } from './composables/useContextCapture'
 import AppSidebar from './components/AppSidebar.vue'
 import BottomTabBar from './components/BottomTabBar.vue'
+import TitleBar from './components/TitleBar.vue'
 import ReceivePanel from './components/ReceivePanel.vue'
 import DevicePanel from './components/DevicePanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -37,28 +38,41 @@ function onSelectTab(tab: string): void {
 </script>
 
 <template>
-  <!-- 横屏布局：左侧边栏 + 右侧内容 -->
-  <div v-if="!isPortrait" class="app-layout">
-    <AppSidebar :active-tab="activeTab" @select="onSelectTab" />
-    <main class="app-main">
-      <component :is="panelMap[activeTab]" />
-    </main>
-  </div>
+  <div class="app-root">
+    <TitleBar />
 
-  <!-- 竖屏布局：内容在上 + 底部 Tab 栏 -->
-  <div v-else class="app-layout app-layout--portrait">
-    <main class="app-main">
-      <component :is="panelMap[activeTab]" />
-    </main>
-    <BottomTabBar :active-tab="activeTab" @select="onSelectTab" />
+    <!-- 横屏布局：左侧边栏 + 右侧内容 -->
+    <div v-if="!isPortrait" class="app-layout">
+      <AppSidebar :active-tab="activeTab" @select="onSelectTab" />
+      <main class="app-main">
+        <component :is="panelMap[activeTab]" />
+      </main>
+    </div>
+
+    <!-- 竖屏布局：内容在上 + 底部 Tab 栏 -->
+    <div v-else class="app-layout app-layout--portrait">
+      <main class="app-main">
+        <component :is="panelMap[activeTab]" />
+      </main>
+      <BottomTabBar :active-tab="activeTab" @select="onSelectTab" />
+    </div>
   </div>
 </template>
 
 <style scoped>
-.app-layout {
+.app-root {
+  flex: 1;
   display: flex;
+  flex-direction: column;
   height: 100vh;
-  width: 100vw;
+  min-width: 0;
+}
+
+.app-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  width: 100%;
 }
 
 .app-layout--portrait {

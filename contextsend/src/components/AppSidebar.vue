@@ -57,7 +57,7 @@ const navItems = [
 .sidebar {
   width: 220px;
   min-width: 220px;
-  height: 100vh;
+  height: 100%;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;

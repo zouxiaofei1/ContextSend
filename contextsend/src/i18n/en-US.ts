@@ -8,6 +8,11 @@ export default {
     devices: 'Devices',
     settings: 'Settings',
   },
+  titlebar: {
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    close: 'Close',
+  },
   receive: {
     title: 'Current Conversation',
     count: '{count} messages',
