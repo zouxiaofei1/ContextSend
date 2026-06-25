@@ -91,6 +91,7 @@ pub fn list_devices(state: State<'_, AppState>) -> Vec<Device> {
 
 /// 配对发起结果。
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PairingStarted {
     pub pairing_id: u64,
     pub pin: String,

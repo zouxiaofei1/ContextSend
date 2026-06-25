@@ -31,6 +31,8 @@ pub enum NetEvent {
     /// 一台设备失联。
     DeviceLost { uuid: String },
     /// 收到入站配对请求，附 6 位配对码，等用户确认。
+    // 注：外层 `rename_all` 只改变体名，不改变体内字段名，故每个含字段的变体需单独标注。
+    #[serde(rename_all = "camelCase")]
     IncomingPairing {
         pairing_id: u64,
         peer_uuid: String,
@@ -38,12 +40,14 @@ pub enum NetEvent {
         pin: String,
     },
     /// 成功接收到一段对话。
+    #[serde(rename_all = "camelCase")]
     ConversationReceived {
         from_uuid: String,
         from_name: String,
         conversation: Conversation,
     },
     /// 某次配对/传输失败。
+    #[serde(rename_all = "camelCase")]
     Failed { pairing_id: u64, reason: String },
 }
 

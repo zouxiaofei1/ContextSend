@@ -341,15 +341,25 @@ export const useAppStore = defineStore('app', () => {
   /** 确认入站配对码一致后，接收对端对话。 */
   async function acceptIncoming(): Promise<void> {
     if (!incoming.value) return
-    await invoke('accept_incoming', { pairingId: incoming.value.pairingId })
-    incoming.value = null
+    const { pairingId } = incoming.value
+    incoming.value = null // 先关弹窗，避免请求失败时卡住遮罩。
+    try {
+      await invoke('accept_incoming', { pairingId })
+    } catch (e) {
+      error.value = `接收失败：${String(e)}`
+    }
   }
 
   /** 拒绝当前入站配对。 */
   async function rejectIncoming(): Promise<void> {
     if (!incoming.value) return
-    await invoke('reject_pairing', { pairingId: incoming.value.pairingId })
+    const { pairingId } = incoming.value
     incoming.value = null
+    try {
+      await invoke('reject_pairing', { pairingId })
+    } catch (e) {
+      error.value = `拒绝失败：${String(e)}`
+    }
   }
 
   /** 导入 OpenAI Compatible JSON 文本。 */
