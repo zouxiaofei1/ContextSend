@@ -2,6 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../stores/app'
 import { useToastStore } from '../stores/toast'
+import { sanitizeSnippet } from '../utils/sanitizeSnippet'
 
 /**
  * 全局上下文捕获：在窗口**任意位置**粘贴或拖入一段文本，即自动匹配回本地会话
@@ -38,18 +39,19 @@ export function useContextCapture(): void {
    * 外部拖入（从浏览器、文件管理器等）不会在窗口内触发此事件。
    * 记录标记，供 onDrop 判断来源。
    */
-  function onDragStart(_e: DragEvent): void {
+  function onDragStart(): void {
     isInternalDrag = true
   }
 
   /** 拖拽操作结束（drop 后或取消后），清除内部拖拽标记。 */
-  function onDragEnd(_e: DragEvent): void {
+  function onDragEnd(): void {
     isInternalDrag = false
   }
 
   /** 执行匹配并入库。 */
   async function run(raw: string): Promise<void> {
-    const snippet = raw.trim()
+    // 先清洗：剔除孤立代理（否则 IPC 序列化后端报 hex escape）、零宽 / 控制字符。
+    const snippet = sanitizeSnippet(raw).trim()
     if (!snippet) return
     try {
       const r = await app.matchContext(snippet)

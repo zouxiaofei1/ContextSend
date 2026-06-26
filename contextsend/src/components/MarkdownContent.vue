@@ -7,6 +7,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { renderMarkdown } from '../composables/useMarkdown'
+import { resolveLang, fallbackIconSvg } from '../composables/useLangIcon'
 
 const { t } = useI18n()
 
@@ -47,15 +48,32 @@ function enhanceBlock(pre: HTMLElement): void {
   if (!code) return
   pre.setAttribute('data-enhanced', '')
 
+  // 去掉高亮 HTML 末尾的纯换行：markdown 代码块结尾的换行会被 white-space:pre 渲染成
+  // 一个没有对应行号的空视觉行，使 code 比 gutter 多一行、行号整体错位。先清理渲染层，
+  // 再据此统计行数，保证 gutter 行数与 code 视觉行数严格相等。
+  code.innerHTML = code.innerHTML.replace(/\n+$/, '')
+
   const raw = code.textContent ?? ''
   const lang = pre.dataset.lang || 'text'
 
-  // 头部：语言标签 + 复制按钮
+  // 头部：语言图标 + 名 + 复制按钮
   const header = document.createElement('div')
   header.className = 'code-header'
   const langEl = document.createElement('span')
   langEl.className = 'code-lang'
-  langEl.textContent = lang
+  const { name, iconUrl, abbr, hue } = resolveLang(lang)
+  const iconBox = document.createElement('span')
+  iconBox.className = 'code-lang-icon'
+  if (iconUrl) {
+    const img = document.createElement('img')
+    img.src = iconUrl
+    img.alt = ''
+    iconBox.append(img)
+  } else {
+    // 未收录图标：圆角矩形 + 右下角缩写占位
+    iconBox.innerHTML = fallbackIconSvg(abbr, hue)
+  }
+  langEl.append(iconBox, document.createTextNode(name))
   const copyBtn = document.createElement('button')
   copyBtn.className = 'code-copy'
   copyBtn.type = 'button'
@@ -73,7 +91,7 @@ function enhanceBlock(pre: HTMLElement): void {
   header.append(langEl, copyBtn)
 
   // 行号 gutter（不参与复制）+ 可横向滚动的代码区
-  const lineCount = (raw.replace(/\n+$/, '') || '').split('\n').length
+  const lineCount = raw.split('\n').length
   const gutter = document.createElement('div')
   gutter.className = 'code-gutter'
   gutter.setAttribute('aria-hidden', 'true')
@@ -171,11 +189,24 @@ onBeforeUnmount(() => {
   background: rgba(127, 127, 127, 0.08);
 }
 .md-body :deep(.code-lang) {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.md-body :deep(.code-lang-icon) {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+.md-body :deep(.code-lang-icon img),
+.md-body :deep(.code-lang-icon svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .md-body :deep(.code-copy) {
   font-size: 0.7rem;

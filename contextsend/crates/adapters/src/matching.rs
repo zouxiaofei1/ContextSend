@@ -6,8 +6,9 @@
 //! 策略（从严到宽）：
 //! 1. **长度门槛**：归一化后过短的片段直接拒绝（[`MIN_SNIPPET_CHARS`]），避免误匹配。
 //! 2. **精确子串**：归一化后片段是某会话全文的子串 → 命中，得分 1.0。
-//! 3. **字符 n-gram 模糊**：按 [`NGRAM_K`] 字符窗口求重合比例，容忍复制时的轻微改动；
-//!    超过 [`FUZZY_THRESHOLD`] 取最高分者。
+//! 3. **字符 n-gram 模糊**：按 [`NGRAM_K`] 字符窗口比对，综合「整体重合比例」与
+//!    「最长连续命中段长度」取分（见 [`match_score`]），超过 [`FUZZY_THRESHOLD`]
+//!    取最高分者。后者让夹带公式渲染噪声的长片段，凭一段足够长的吻合文字即可命中。
 
 use std::collections::HashSet;
 
@@ -21,6 +22,10 @@ pub const MIN_SNIPPET_CHARS: usize = 8;
 pub const NGRAM_K: usize = 10;
 /// 模糊匹配判定为「命中」的最低重合比例。
 pub const FUZZY_THRESHOLD: f32 = 0.55;
+/// 「最长连续命中」判定为强匹配所需覆盖的字符数（归一化基准）。
+/// 片段里存在一段 ≥ 此长度、与会话原文几乎逐字一致的文字，即足以命中，
+/// 不被公式渲染等噪声稀释整体比例。
+pub const ABS_MATCH_CHARS: usize = 40;
 
 /// 一次成功的匹配结果。
 pub struct ConversationMatch {
@@ -52,11 +57,15 @@ fn conversation_fulltext(c: &Conversation) -> String {
     parts.join("\n")
 }
 
-/// 片段与目标文本的字符 n-gram 重合比例（`0..1`）。
+/// 片段与目标文本的匹配得分（`0..1`）。
 ///
-/// 取片段所有 `k` 字符窗口，统计其中出现在目标文本窗口集合里的比例。
-/// 仅个别字符被改动时，只有跨改动点的少数窗口失配，整体比例仍高 → 容忍轻微编辑。
-fn ngram_overlap(snippet_chars: &[char], text: &str) -> f32 {
+/// 综合两个角度取较大者：
+/// - **整体重合比例**：片段所有 `k` 字符窗口中、落在目标窗口集合里的比例。对短而
+///   干净的片段有效，但会被长片段里的噪声稀释。
+/// - **最长连续命中**：片段里与目标几乎逐字一致的最长一段所覆盖的字符数，归一化到
+///   [`ABS_MATCH_CHARS`]。这让夹带大量噪声（如 KaTeX 渲染出的散字）的长片段，只要
+///   含一段足够长的吻合文字即可命中，不被噪声拉低。
+fn match_score(snippet_chars: &[char], text: &str) -> f32 {
     let k = NGRAM_K.min(snippet_chars.len());
     if k == 0 {
         return 0.0;
@@ -70,11 +79,23 @@ fn ngram_overlap(snippet_chars: &[char], text: &str) -> f32 {
     if snippet_grams.is_empty() {
         return 0.0;
     }
-    let hits = snippet_grams
-        .iter()
-        .filter(|w| text_grams.contains(*w))
-        .count();
-    hits as f32 / snippet_grams.len() as f32
+    let mut hits = 0usize;
+    let mut run = 0usize; // 当前连续命中的 k-gram 数
+    let mut best_run = 0usize; // 最长连续命中
+    for w in &snippet_grams {
+        if text_grams.contains(w) {
+            hits += 1;
+            run += 1;
+            best_run = best_run.max(run);
+        } else {
+            run = 0;
+        }
+    }
+    let ratio = hits as f32 / snippet_grams.len() as f32;
+    // best_run 个连续 k-gram 约覆盖 best_run + k - 1 个字符。
+    let run_chars = if best_run > 0 { best_run + k - 1 } else { 0 };
+    let run_score = (run_chars as f32 / ABS_MATCH_CHARS as f32).min(1.0);
+    ratio.max(run_score)
 }
 
 /// 在一组会话里匹配片段，按需更新 `best`。
@@ -100,8 +121,8 @@ fn match_in_app(
             });
         }
 
-        // 否则按 n-gram 重合比例做模糊匹配，留最高分。
-        let score = ngram_overlap(snippet_chars, &text);
+        // 否则按综合得分做模糊匹配（比例 vs 最长连续命中），留最高分。
+        let score = match_score(snippet_chars, &text);
         if score >= FUZZY_THRESHOLD && best.as_ref().is_none_or(|b| score > b.score) {
             *best = Some(ConversationMatch {
                 app: app.to_string(),
@@ -201,7 +222,7 @@ mod tests {
         let original = "这是一段足够长的上下文用来测试模糊匹配能力";
         let edited = "这是一段足够长的上下文用来测试模糊比对能力";
         let snippet_chars: Vec<char> = normalize(edited).chars().collect();
-        let score = ngram_overlap(&snippet_chars, &normalize(original));
+        let score = match_score(&snippet_chars, &normalize(original));
         assert!(score > FUZZY_THRESHOLD, "score={score}");
     }
 
@@ -210,8 +231,20 @@ mod tests {
         let snippet_chars: Vec<char> = normalize("完全不相关的一段文字内容这里随便写写")
             .chars()
             .collect();
-        let score = ngram_overlap(&snippet_chars, &normalize("另一篇讲述天气与温度的对话记录"));
+        let score = match_score(&snippet_chars, &normalize("另一篇讲述天气与温度的对话记录"));
         assert!(score < FUZZY_THRESHOLD, "score={score}");
+    }
+
+    #[test]
+    fn dirty_snippet_matches_via_longest_run() {
+        // 模拟从 ChatBox 拖拽 / 复制得到的脏片段：公式区被渲染成零散字符，
+        // 但中间夹着一段足够长、与原会话逐字一致的中文叙述。
+        let clean = "当方程的判别式大于零时该一元二次方程在实数范围内有两个不相等的实数解";
+        let convo_text = normalize(&format!("数学问答 {clean} 你说得对"));
+        let dirty = format!("a ≠ 0 N N 2 + b x + c = 0 {clean} √ π ∑ 1 / n ^ 2");
+        let snippet_chars: Vec<char> = normalize(&dirty).chars().collect();
+        let score = match_score(&snippet_chars, &convo_text);
+        assert!(score >= FUZZY_THRESHOLD, "score={score}");
     }
 
     #[tokio::test]
