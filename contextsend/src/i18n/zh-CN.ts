@@ -43,6 +43,8 @@ export default {
     localSnippet: '本地片段',
     matchFound: '已匹配到 {app} 的会话，并加入存储库',
     matchNone: '未匹配到会话，已按片段加入存储库',
+    copyCode: '复制',
+    copied: '已复制',
   },
   device: {
     title: '设备列表',

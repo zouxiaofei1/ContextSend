@@ -44,6 +44,8 @@ export default {
     localSnippet: 'Local snippet',
     matchFound: 'Matched a conversation in {app} and added to the library',
     matchNone: 'No match found; added the snippet to the library',
+    copyCode: 'Copy',
+    copied: 'Copied',
   },
   device: {
     title: 'Devices',

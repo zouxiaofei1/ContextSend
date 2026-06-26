@@ -1,0 +1,26 @@
+{
+  "model": "gpt-4o",
+  "title": "复杂数学公式演示",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是一个擅长数学排版的助手，回答中请使用 LaTeX 公式（行内用 $...$，块级用 $$...$$）。"
+    },
+    {
+      "role": "user",
+      "content": "请展示各种复杂数学公式的排版效果，越丰富越好。"
+    },
+    {
+      "role": "assistant",
+      "content": "# 数学公式排版演示\n\n## 1. 行内公式\n当 $a \\ne 0$ 时，方程 $ax^2 + bx + c = 0$ 有两个实数解，判别式为 $\\Delta = b^2 - 4ac$。\n\n## 2. 二次求根公式（块级）\n$$\nx = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\n$$\n\n## 3. 欧拉恒等式\n$$ e^{i\\pi} + 1 = 0 $$\n\n## 4. 高斯积分\n$$\n\\int_{-\\infty}^{+\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}\n$$\n\n## 5. 求和与级数（巴塞尔问题）\n$$\n\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}\n$$\n\n## 6. 矩阵与行列式\n$$\nA = \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}, \\quad \\det(A) = ad - bc\n$$\n\n## 7. 麦克斯韦方程组（对齐环境）\n$$\n\\begin{aligned}\n\\nabla \\cdot \\mathbf{E} &= \\frac{\\rho}{\\varepsilon_0} \\\\\n\\nabla \\cdot \\mathbf{B} &= 0 \\\\\n\\nabla \\times \\mathbf{E} &= -\\frac{\\partial \\mathbf{B}}{\\partial t} \\\\\n\\nabla \\times \\mathbf{B} &= \\mu_0 \\mathbf{J} + \\mu_0 \\varepsilon_0 \\frac{\\partial \\mathbf{E}}{\\partial t}\n\\end{aligned}\n$$\n\n## 8. 导数定义\n$$\nf'(x) = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}\n$$\n\n## 9. 分段函数\n$$\n\\operatorname{sgn}(x) =\n\\begin{cases}\n-1, & x < 0 \\\\\n0,  & x = 0 \\\\\n1,  & x > 0\n\\end{cases}\n$$\n\n## 10. 配合代码块（数值积分）\n```python\nimport numpy as np\n\ndef gaussian(x):\n    return np.exp(-x ** 2)\n\n# 用梯形法近似高斯积分，结果应接近 sqrt(pi)\nxs = np.linspace(-10, 10, 100001)\nprint(np.trapz(gaussian(xs), xs))\n```\n"
+    },
+    {
+      "role": "user",
+      "content": "再补充一个含行内公式混排的说明段落。"
+    },
+    {
+      "role": "assistant",
+      "content": "在统计学中，正态分布的概率密度函数为 $f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}} \\, e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}$，其中 $\\mu$ 是均值、$\\sigma$ 是标准差。当 $\\mu = 0$ 且 $\\sigma = 1$ 时称为**标准正态分布**，其累积分布函数 $\\Phi(x) = \\frac{1}{2}\\left[1 + \\operatorname{erf}\\!\\left(\\frac{x}{\\sqrt{2}}\\right)\\right]$。\n\n下面是一组常用极限：$\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$，以及 $\\lim_{n \\to \\infty} \\left(1 + \\frac{1}{n}\\right)^n = e$。"
+    }
+  ]
+}
