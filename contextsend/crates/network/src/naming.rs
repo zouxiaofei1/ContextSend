@@ -5,6 +5,8 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
+use crate::identity::NAME_MAX_LEN;
+
 /// 形容词 / 修饰词。
 const ADJECTIVES: &[&str] = &[
     "晨雾", "微风", "静水", "流云", "暖阳", "幽谷", "疏星", "清露", "远山", "归舟", "落霞", "听雨",
@@ -23,6 +25,26 @@ pub fn random_name() -> String {
     let adj = ADJECTIVES.choose(&mut rng).copied().unwrap_or("无名");
     let noun = NOUNS.choose(&mut rng).copied().unwrap_or("设备");
     format!("{adj}{noun}")
+}
+
+/// 获取默认设备名：优先使用系统主机名，不可用时回退到随机名。
+///
+/// 主机名可能过长，超过 [`NAME_MAX_LEN`] 个字符时截断并追加 "…"。
+pub fn default_device_name() -> String {
+    match hostname::get() {
+        Ok(host) => {
+            let name = host.to_string_lossy().trim().to_string();
+            if name.is_empty() {
+                return random_name();
+            }
+            if name.chars().count() > NAME_MAX_LEN {
+                name.chars().take(NAME_MAX_LEN).collect::<String>() + "\u{2026}"
+            } else {
+                name
+            }
+        }
+        Err(_) => random_name(),
+    }
 }
 
 #[cfg(test)]

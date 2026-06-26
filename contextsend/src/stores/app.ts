@@ -148,6 +148,7 @@ export const useAppStore = defineStore('app', () => {
     markRead: segments.markRead,
     markAllRead: segments.markAllRead,
     removeSegment: segments.removeSegment,
+    updateSegmentConversation: segments.updateSegmentConversation,
     clearSegments: segments.clearSegments,
     selectSegment: segments.selectSegment,
     // 适配器

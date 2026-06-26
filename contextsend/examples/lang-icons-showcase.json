@@ -1,0 +1,14 @@
+{
+  "model": "gpt-4o",
+  "title": "多语言代码块图标测试",
+  "messages": [
+    {
+      "role": "user",
+      "content": "请用尽可能多的编程语言各写一小段代码，用来测试代码块的语言图标与名称显示。"
+    },
+    {
+      "role": "assistant",
+      "content": "下面每段都标注了不同语言，覆盖「有专属图标」与「走缩写占位」两类：\n\n```python\nprint(\"hello\")\n```\n\n```typescript\nconst x: number = 1\n```\n\n```tsx\nconst A = (): JSX.Element => <div />\n```\n\n```jsx\nconst B = () => <span>hi</span>\n```\n\n```vue\n<template><div>hi</div></template>\n```\n\n```c\nint main(void) { return 0; }\n```\n\n```cpp\nstd::cout << 42 << std::endl;\n```\n\n```csharp\nConsole.WriteLine(42);\n```\n\n```php\n<?php echo 1; ?>\n```\n\n```lua\nprint(1)\n```\n\n```r\nx <- c(1, 2, 3)\n```\n\n```racket\n(display (+ 1 2))\n```\n\n```fortran\nprint *, 'hi'\n```\n\n```pascal\nwriteln('hi');\n```\n\n```zig\nconst x = 1;\n```\n\n```powershell\nWrite-Host 'hi'\n```\n\n```yaml\nname: contextsend\nversion: 1\n```\n\n```toml\nname = \"contextsend\"\nversion = 1\n```\n\n```latex\nE = \\frac{1}{2} m v^2\n```\n\n```sql\nSELECT id, name FROM users WHERE id = 1;\n```\n\n```bash\necho hi && ls -la\n```\n\n以下这些没有专属图标，应显示「圆角矩形 + 右下角缩写」占位：\n\n```javascript\nconsole.log(123)\n```\n\n```rust\nfn main() { let x = 1; }\n```\n\n```go\npackage main\n```\n\n```java\nSystem.out.println(1);\n```\n\n```ruby\nputs 1\n```\n\n```swift\nprint(1)\n```\n\n```kotlin\nfun main() { println(1) }\n```\n\n```html\n<div class=\"box\">hi</div>\n```\n\n```css\na { color: red; }\n```\n\n```json\n{ \"a\": 1, \"b\": [1, 2, 3] }\n```\n\n```dockerfile\nFROM node:20\n```\n\n```graphql\nquery { me { id name } }\n```\n\n最后是一段未指定语言的代码块：\n\n```\nplain text without language\n```\n"
+    }
+  ]
+}

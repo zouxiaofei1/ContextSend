@@ -32,11 +32,11 @@ pub struct DeviceIdentity {
 }
 
 impl DeviceIdentity {
-    /// 生成一个全新的身份（随机 UUID + 随机中文名）。
+    /// 生成一个全新的身份（随机 UUID + 默认设备名）。
     pub fn generate() -> Self {
         Self {
             uuid: Uuid::new_v4().to_string(),
-            name: naming::random_name(),
+            name: naming::default_device_name(),
         }
     }
 

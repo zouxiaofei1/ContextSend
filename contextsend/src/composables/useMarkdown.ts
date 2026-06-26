@@ -38,8 +38,10 @@ const md = new MarkdownIt({
     } else {
       html = md.utils.escapeHtml(code)
     }
-    const label = language || 'text'
-    return `<pre class="code-block hljs" data-lang="${label}"><code>${html}</code></pre>`
+    // 用原始 lang 作标签：即使 hljs 未高亮（mermaid / dockerfile 等），也保留语言
+    // 标识，供前端显示图标名、以及识别 mermaid 做图形渲染。转义防属性注入。
+    const label = lang || 'text'
+    return `<pre class="code-block hljs" data-lang="${md.utils.escapeHtml(label)}"><code>${html}</code></pre>`
   },
 })
 
@@ -73,4 +75,15 @@ export function renderMarkdown(text: string): string {
     ADD_ATTR: ['target', 'encoding'],
     ADD_TAGS: ['semantics', 'annotation'],
   })
+}
+
+/**
+ * 净化一段 SVG 源码用于安全内联渲染（代码块预览）。
+ *
+ * 内容来自对端，SVG 可携带 `<script>` / `on*` 事件 / `<foreignObject>` 等攻击面。
+ * 用 DOMPurify 的 SVG 配置只保留绘图相关标签与属性，移除脚本与事件处理器。
+ * 返回空串表示无有效 SVG（调用方应回退为源码展示）。
+ */
+export function sanitizeSvg(src: string): string {
+  return DOMPurify.sanitize(src, { USE_PROFILES: { svg: true, svgFilters: true } })
 }

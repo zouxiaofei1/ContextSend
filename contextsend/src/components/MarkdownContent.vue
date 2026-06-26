@@ -6,10 +6,13 @@
 // data-lang 占位结构做 DOM 增强，避免在 v-html 字符串里绑定事件。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { renderMarkdown } from '../composables/useMarkdown'
+import { renderMarkdown, sanitizeSvg } from '../composables/useMarkdown'
 import { resolveLang, fallbackIconSvg } from '../composables/useLangIcon'
 
 const { t } = useI18n()
+
+/** 超过此行数的代码块默认折叠。 */
+const FOLD_LINES = 24
 
 /** 多模态内容块，对齐 cs-core 的 ContentPart。 */
 interface TextPart {
@@ -46,7 +49,6 @@ function html(text: string): string {
 function enhanceBlock(pre: HTMLElement): void {
   const code = pre.querySelector('code')
   if (!code) return
-  pre.setAttribute('data-enhanced', '')
 
   // 去掉高亮 HTML 末尾的纯换行：markdown 代码块结尾的换行会被 white-space:pre 渲染成
   // 一个没有对应行号的空视觉行，使 code 比 gutter 多一行、行号整体错位。先清理渲染层，
@@ -88,7 +90,16 @@ function enhanceBlock(pre: HTMLElement): void {
       timers.add(id)
     })
   })
-  header.append(langEl, copyBtn)
+  // 折叠按钮 + 复制按钮归入右侧操作区
+  const toggle = document.createElement('button')
+  toggle.className = 'code-fold'
+  toggle.type = 'button'
+  toggle.title = t('receive.toggleFold')
+  toggle.setAttribute('aria-label', t('receive.toggleFold'))
+  const actions = document.createElement('div')
+  actions.className = 'code-actions'
+  actions.append(toggle, copyBtn)
+  header.append(langEl, actions)
 
   // 行号 gutter（不参与复制）+ 可横向滚动的代码区
   const lineCount = raw.split('\n').length
@@ -105,14 +116,111 @@ function enhanceBlock(pre: HTMLElement): void {
   area.className = 'code-area'
   area.append(gutter, scroll)
 
+  // 代码折叠：超过阈值的长代码默认折叠，点击头部箭头切换。
+  let collapsed = lineCount > FOLD_LINES
+  const applyFold = (): void => {
+    area.style.display = collapsed ? 'none' : ''
+    toggle.textContent = collapsed ? '▸' : '▾'
+    toggle.setAttribute('aria-expanded', String(!collapsed))
+  }
+  toggle.addEventListener('click', () => {
+    collapsed = !collapsed
+    applyFold()
+  })
+  applyFold()
+
   pre.append(header, area)
 }
 
-/** 遍历容器下所有尚未处理的代码块。 */
+/**
+ * 渲染 mermaid 图：懒加载 mermaid（体积大），strict 模式（内容来自对端，禁交互并
+ * 净化）。渲染失败则还原为普通代码块展示源码。
+ */
+async function renderMermaid(pre: HTMLElement): Promise<void> {
+  const src = (pre.querySelector('code')?.textContent ?? '').trim()
+  if (!src) {
+    enhanceBlock(pre)
+    return
+  }
+  const holder = document.createElement('div')
+  holder.className = 'mermaid-rendered'
+  pre.replaceWith(holder)
+  try {
+    const mermaid = (await import('mermaid')).default
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: dark ? 'dark' : 'default',
+    })
+    const { svg } = await mermaid.render(`csmmd-${crypto.randomUUID()}`, src)
+    holder.innerHTML = svg
+  } catch {
+    holder.replaceWith(pre)
+    enhanceBlock(pre)
+  }
+}
+
+/** 判断代码块是否为可渲染的 SVG（明确 svg，或 xml/html/无标注但内容含完整 svg）。 */
+function isSvgBlock(pre: HTMLElement): boolean {
+  const lang = pre.dataset.lang ?? ''
+  const src = pre.querySelector('code')?.textContent ?? ''
+  if (lang === 'svg') return /<svg[\s>]/i.test(src)
+  if (lang === 'xml' || lang === 'html' || lang === '' || lang === 'text') {
+    return /<svg[\s\S]*<\/svg>/i.test(src)
+  }
+  return false
+}
+
+/**
+ * SVG 代码块：在普通代码块基础上加「预览 / 源码」切换，默认显示净化后的渲染图。
+ * 净化失败或无有效内容时保持源码视图。
+ */
+function renderSvgPreview(pre: HTMLElement): void {
+  const rawSrc = pre.querySelector('code')?.textContent ?? ''
+  enhanceBlock(pre) // 先生成源码视图（header / 行号 / 复制）
+  const clean = sanitizeSvg(rawSrc)
+  const header = pre.querySelector<HTMLElement>('.code-header')
+  const area = pre.querySelector<HTMLElement>('.code-area')
+  const actions = header?.querySelector<HTMLElement>('.code-actions')
+  if (!clean.trim() || !header || !area || !actions) return
+
+  const preview = document.createElement('div')
+  preview.className = 'svg-preview'
+  preview.innerHTML = clean
+
+  const toggle = document.createElement('button')
+  toggle.className = 'code-fold code-preview-toggle'
+  toggle.type = 'button'
+  let showSource = false
+  const apply = (): void => {
+    area.style.display = showSource ? '' : 'none'
+    preview.style.display = showSource ? 'none' : ''
+    toggle.textContent = showSource ? t('receive.preview') : t('receive.viewSource')
+  }
+  toggle.addEventListener('click', () => {
+    showSource = !showSource
+    apply()
+  })
+  actions.prepend(toggle)
+  area.before(preview)
+  apply() // 默认预览
+}
+
+/** 遍历容器下所有尚未处理的代码块：mermaid / SVG 走图形渲染，其余走代码增强。 */
 function enhance(): void {
   const el = root.value
   if (!el) return
-  el.querySelectorAll<HTMLElement>('pre.code-block:not([data-enhanced])').forEach(enhanceBlock)
+  el.querySelectorAll<HTMLElement>('pre.code-block:not([data-enhanced])').forEach((pre) => {
+    pre.setAttribute('data-enhanced', '')
+    if (pre.dataset.lang === 'mermaid') {
+      void renderMermaid(pre)
+    } else if (isSvgBlock(pre)) {
+      renderSvgPreview(pre)
+    } else {
+      enhanceBlock(pre)
+    }
+  })
 }
 
 watch(
@@ -220,6 +328,54 @@ onBeforeUnmount(() => {
 .md-body :deep(.code-copy:hover) {
   color: var(--accent);
   background: rgba(127, 127, 127, 0.12);
+}
+.md-body :deep(.code-actions) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.md-body :deep(.code-fold) {
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+.md-body :deep(.code-fold:hover) {
+  color: var(--accent);
+  background: rgba(127, 127, 127, 0.12);
+}
+/* mermaid 渲染结果 */
+.md-body :deep(.mermaid-rendered) {
+  margin: 0.6rem 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+.md-body :deep(.mermaid-rendered svg) {
+  max-width: 100%;
+  height: auto;
+}
+/* SVG 代码块预览 */
+.md-body :deep(.code-preview-toggle) {
+  font-size: 0.7rem;
+}
+.md-body :deep(.svg-preview) {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+}
+.md-body :deep(.svg-preview svg) {
+  max-width: 100%;
+  height: auto;
 }
 
 /* 行号 gutter + 横向滚动代码区 */

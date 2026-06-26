@@ -112,6 +112,15 @@ export function useSegments() {
     persist()
   }
 
+  /** 用新对话替换某段内容（编辑保存后），并落盘。 */
+  function updateSegmentConversation(id: string, conversation: Conversation): void {
+    const seg = segments.value.find((s) => s.id === id)
+    if (seg) {
+      seg.conversation = conversation
+      persist()
+    }
+  }
+
   /** 清空所有段。 */
   function clearSegments(): void {
     segments.value = []
@@ -133,6 +142,7 @@ export function useSegments() {
     markRead,
     markAllRead,
     removeSegment,
+    updateSegmentConversation,
     clearSegments,
     selectSegment,
   }

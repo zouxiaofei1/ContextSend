@@ -19,6 +19,7 @@ tokio.workspace = true
 mdns-sd.workspace = true
 uuid.workspace = true
 rand.workspace = true
+hostname = "0.4"
 x25519-dalek = { workspace = true, features = ["static_secrets"] }
 aes-gcm.workspace = true
 hkdf.workspace = true

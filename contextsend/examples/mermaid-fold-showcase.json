@@ -1,0 +1,14 @@
+{
+  "model": "gpt-4o",
+  "title": "Mermaid 与代码折叠测试",
+  "messages": [
+    {
+      "role": "user",
+      "content": "画两个 mermaid 图，再给一段长代码和一段短代码，用来测试图形渲染和折叠。"
+    },
+    {
+      "role": "assistant",
+      "content": "## 1. 流程图（mermaid）\n\n```mermaid\ngraph TD\n  A[开始] --> B{条件判断}\n  B -->|成立| C[执行分支]\n  B -->|不成立| D[跳过]\n  C --> E[结束]\n  D --> E\n```\n\n## 2. 时序图（mermaid）\n\n```mermaid\nsequenceDiagram\n  participant U as 用户\n  participant A as ContextSend\n  participant P as 对端设备\n  U->>A: 选中上下文\n  A->>P: 配对并推送\n  P-->>A: 确认接收\n  A-->>U: 推送成功\n```\n\n## 3. 长代码（超过 24 行，默认折叠）\n\n```python\nimport math\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass Vec2:\n    x: float\n    y: float\n\n    def length(self) -> float:\n        return math.hypot(self.x, self.y)\n\n    def normalized(self) -> \"Vec2\":\n        n = self.length()\n        if n == 0:\n            return Vec2(0.0, 0.0)\n        return Vec2(self.x / n, self.y / n)\n\n    def dot(self, other: \"Vec2\") -> float:\n        return self.x * other.x + self.y * other.y\n\n\ndef angle_between(a: Vec2, b: Vec2) -> float:\n    da = a.normalized()\n    db = b.normalized()\n    cos = max(-1.0, min(1.0, da.dot(db)))\n    return math.degrees(math.acos(cos))\n\n\nif __name__ == \"__main__\":\n    print(angle_between(Vec2(1, 0), Vec2(0, 1)))\n```\n\n## 4. 短代码（默认展开）\n\n```javascript\nconsole.log('hello from contextsend')\n```\n"
+    }
+  ]
+}

@@ -3,8 +3,7 @@ import { ref, computed } from 'vue'
 import { useAppStore, type ConversationSegment } from '../stores/app'
 import { useToastStore } from '../stores/toast'
 import { useI18n } from 'vue-i18n'
-import { ADAPTER_JAN, ADAPTER_CHATBOX } from '../constants'
-import MarkdownContent from './MarkdownContent.vue'
+import SegmentItem from './SegmentItem.vue'
 
 const app = useAppStore()
 const toast = useToastStore()
@@ -22,16 +21,6 @@ const showImportExport = ref(false)
 
 const unreadSegments = computed(() => app.segments.filter((s) => !s.read))
 const readSegments = computed(() => app.segments.filter((s) => s.read))
-
-function segTitle(s: ConversationSegment): string {
-  return s.conversation.title || s.conversation.model || t('receive.title')
-}
-
-function fmtTime(ts: number): string {
-  const d = new Date(ts)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 function toggleSegment(s: ConversationSegment): void {
   if (expandedSegments.value.has(s.id)) {
@@ -102,37 +91,14 @@ async function onExport(): Promise<void> {
         }})
       </button>
       <ul v-show="!groupCollapsed.unread" class="seg-list">
-        <li v-for="s in unreadSegments" :key="s.id" class="seg-item seg-item--unread">
-          <div class="seg-head" @click="toggleSegment(s)">
-            <span class="seg-toggle muted">{{ isExpanded(s.id) ? '▲' : '▼' }}</span>
-            <span class="seg-title">{{ segTitle(s) }}</span>
-            <span class="seg-meta muted">
-              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} ·
-              {{ t('receive.count', { count: s.conversation.messages.length }) }}
-            </span>
-            <span class="dot-new" />
-          </div>
-          <div v-if="isExpanded(s.id)" class="seg-body">
-            <div v-for="(m, i) in s.conversation.messages" :key="i" class="msg">
-              <b class="msg-role">{{ m.role }}</b>
-              <MarkdownContent :content="m.content" />
-            </div>
-            <div class="seg-actions">
-              <button class="small ghost" @click="app.selectSegment(s.id)">
-                {{ t('receive.setPushSource') }}
-              </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_JAN)">
-                {{ t('receive.importToJan') }}
-              </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_CHATBOX)">
-                {{ t('receive.importToChatBox') }}
-              </button>
-              <button class="small ghost danger" @click="app.removeSegment(s.id)">
-                {{ t('receive.delete') }}
-              </button>
-            </div>
-          </div>
-        </li>
+        <SegmentItem
+          v-for="s in unreadSegments"
+          :key="s.id"
+          :segment="s"
+          :expanded="isExpanded(s.id)"
+          :unread="true"
+          @toggle="toggleSegment(s)"
+        />
       </ul>
     </section>
 
@@ -142,39 +108,14 @@ async function onExport(): Promise<void> {
         {{ groupCollapsed.read ? '▶' : '▼' }} {{ t('receive.read') }} ({{ readSegments.length }})
       </button>
       <ul v-show="!groupCollapsed.read" class="seg-list">
-        <li v-for="s in readSegments" :key="s.id" class="seg-item">
-          <div class="seg-head" @click="toggleSegment(s)">
-            <span class="seg-toggle muted">{{ isExpanded(s.id) ? '▲' : '▼' }}</span>
-            <span class="seg-title">{{ segTitle(s) }}</span>
-            <span class="seg-meta muted">
-              {{ s.fromName }} · {{ fmtTime(s.receivedAt) }} ·
-              {{ t('receive.count', { count: s.conversation.messages.length }) }}
-            </span>
-            <span v-if="s.id === app.selectedSegmentId" class="push-badge">{{
-              t('receive.pushSource')
-            }}</span>
-          </div>
-          <div v-if="isExpanded(s.id)" class="seg-body">
-            <div v-for="(m, i) in s.conversation.messages" :key="i" class="msg">
-              <b class="msg-role">{{ m.role }}</b>
-              <MarkdownContent :content="m.content" />
-            </div>
-            <div class="seg-actions">
-              <button class="small ghost" @click="app.selectSegment(s.id)">
-                {{ t('receive.setPushSource') }}
-              </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_JAN)">
-                {{ t('receive.importToJan') }}
-              </button>
-              <button class="small ghost" @click="app.importToApp(s.conversation, ADAPTER_CHATBOX)">
-                {{ t('receive.importToChatBox') }}
-              </button>
-              <button class="small ghost danger" @click="app.removeSegment(s.id)">
-                {{ t('receive.delete') }}
-              </button>
-            </div>
-          </div>
-        </li>
+        <SegmentItem
+          v-for="s in readSegments"
+          :key="s.id"
+          :segment="s"
+          :expanded="isExpanded(s.id)"
+          :unread="false"
+          @toggle="toggleSegment(s)"
+        />
       </ul>
     </section>
 
@@ -277,94 +218,6 @@ async function onExport(): Promise<void> {
   margin: 0.5rem 0 0;
   padding-left: 0;
   list-style: none;
-}
-
-.seg-item {
-  border-bottom: 1px solid var(--border);
-}
-
-.seg-item:last-child {
-  border-bottom: none;
-}
-
-.seg-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-  cursor: pointer;
-}
-
-.seg-head:hover {
-  color: var(--accent);
-}
-
-.seg-toggle {
-  font-size: 0.65rem;
-  flex-shrink: 0;
-}
-
-.seg-title {
-  font-weight: 600;
-  font-size: 0.92rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.seg-meta {
-  font-size: 0.75rem;
-  margin-left: auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 40%;
-  flex-shrink: 1;
-}
-
-.dot-new {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-}
-
-.push-badge {
-  font-size: 0.65rem;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 0.05rem 0.3rem;
-  flex-shrink: 0;
-}
-
-/* 段展开后的消息体 */
-.seg-body {
-  padding: 0.25rem 0 0.75rem;
-}
-
-.msg {
-  padding: 0.5rem 0;
-  border-top: 1px dashed var(--border);
-}
-
-.msg-role {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--accent);
-  text-transform: uppercase;
-  margin-bottom: 0.25rem;
-}
-
-.seg-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.danger:hover {
-  color: #e5534b;
 }
 
 textarea {
