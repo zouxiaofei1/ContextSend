@@ -13,6 +13,12 @@ export const DEFAULT_START_MINIMIZED = false
 export const DEFAULT_CUSTOM_PORT = 0
 export const DEFAULT_CONNECTION_TIMEOUT = 30
 
+/**
+ * 「显示/隐藏主窗口」全局快捷键，空字符串表示未设置（功能关闭）。
+ * 字符串为 Tauri accelerator 语法（如 `CmdOrCtrl+Shift+C`）。
+ */
+export const DEFAULT_GLOBAL_SHORTCUT = ''
+
 // ---- 校验范围 ----
 
 /** 自定义端口号合法范围 */

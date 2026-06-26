@@ -4,6 +4,7 @@
 //! （[`cs_core`] / `cs_adapters` / `cs_network`）。业务逻辑在各 crate 内实现。
 
 mod commands;
+mod shortcut;
 mod tray;
 
 use std::collections::HashMap;
@@ -28,6 +29,11 @@ pub fn run() {
         ))
         .setup(|app| {
             tray::setup_tray(app)?;
+
+            // 全局快捷键插件（仅桌面端）：注册「显示/隐藏主窗口」回调。
+            // 具体热键由前端启动时经 set_global_shortcut 动态注册。
+            #[cfg(desktop)]
+            app.handle().plugin(shortcut::init_plugin())?;
 
             // 身份持久化到 app 数据目录。
             // 调试用：设置 CONTEXTSEND_DATA_DIR 可覆盖数据目录，便于同机开多个实例
@@ -144,6 +150,7 @@ pub fn run() {
             commands::import_to_app,
             commands::match_context,
             commands::set_minimize_to_tray,
+            shortcut::set_global_shortcut,
         ])
         .run(tauri::generate_context!())
         .expect("启动 ContextSend 失败");

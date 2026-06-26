@@ -25,7 +25,15 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_and_focus(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                // 退出前主动注销 mDNS（goodbye），让对端立即移除本机。
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Some(service) = state.service.get() {
+                        service.shutdown();
+                    }
+                }
+                app.exit(0)
+            }
             "toggle_autostart" => {
                 // 切换开机自启并刷新菜单
                 let mgr = app.autolaunch();
@@ -51,14 +59,7 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
-                    } else {
-                        show_and_focus(app);
-                    }
-                }
+                toggle_main_window(tray.app_handle());
             }
         })
         .build(app)?;
@@ -140,10 +141,23 @@ pub fn update_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 }
 
 /// 显示主窗口并置于前台。
-fn show_and_focus<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+pub fn show_and_focus<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// 切换主窗口显隐：可见则隐藏到托盘，否则显示并聚焦。
+///
+/// 托盘左键点击与全局快捷键共用此逻辑，保证行为一致。
+pub fn toggle_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            show_and_focus(app);
+        }
     }
 }
 

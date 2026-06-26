@@ -18,6 +18,7 @@ export const IPC = {
   SET_MINIMIZE_TO_TRAY: 'set_minimize_to_tray',
   SET_NETWORK_PORT: 'set_network_port',
   SET_CONNECTION_TIMEOUT: 'set_connection_timeout',
+  SET_GLOBAL_SHORTCUT: 'set_global_shortcut',
 } as const
 
 /** Tauri 事件名（后端 emit → 前端 listen） */

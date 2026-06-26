@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../../stores/settings'
+import { useToastStore } from '../../stores/toast'
 import { PORT_MIN, PORT_MAX, TIMEOUT_MIN, TIMEOUT_MAX, RETENTION_OPTIONS } from '../../constants'
 import type { RetentionValue } from '../../constants'
 import SettingsSection from './SettingsSection.vue'
@@ -9,13 +10,24 @@ import SettingRow from './SettingRow.vue'
 import SettingToggle from './SettingToggle.vue'
 import SettingSelect from './SettingSelect.vue'
 import SettingNumber from './SettingNumber.vue'
+import ShortcutInput from './ShortcutInput.vue'
 
 const settings = useSettingsStore()
+const toast = useToastStore()
 const { t } = useI18n()
 
 const retentionOptions = computed(() =>
   RETENTION_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) })),
 )
+
+/** 应用快捷键变更；后端拒绝（语法非法 / 被占用）时提示并保持原值。 */
+async function onShortcutChange(accelerator: string): Promise<void> {
+  try {
+    await settings.setGlobalShortcut(accelerator)
+  } catch {
+    toast.error(t('settings.advanced.shortcutConflict'))
+  }
+}
 </script>
 
 <template>
@@ -57,6 +69,16 @@ const retentionOptions = computed(() =>
       <SettingToggle
         :model-value="settings.startMinimized"
         @update:model-value="settings.toggleStartMinimized()"
+      />
+    </SettingRow>
+
+    <!-- 显示/隐藏窗口全局快捷键 -->
+    <SettingRow :label="t('settings.advanced.globalShortcut')">
+      <ShortcutInput
+        :model-value="settings.globalShortcut"
+        :placeholder="t('settings.advanced.shortcutUnset')"
+        :recording-hint="t('settings.advanced.shortcutRecording')"
+        @update:model-value="onShortcutChange"
       />
     </SettingRow>
 

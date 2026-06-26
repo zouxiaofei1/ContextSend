@@ -58,14 +58,27 @@ struct Inner {
     pending: Mutex<HashMap<u64, Session<TcpStream>>>,
     next_id: AtomicU64,
     events: UnboundedSender<NetEvent>,
+    /// 本机身份（可改名）。握手与广播都读这一份，保证改名实时生效。
+    identity: Mutex<DeviceIdentity>,
+    /// mDNS 发现器，用于改名重新广播与退出注销。
+    discovery: Discovery,
+}
+
+impl Inner {
+    /// 构造当前身份的握手 Hello（每次读实时名）。
+    fn local_hello(&self) -> LocalHello {
+        let id = self.identity.lock().unwrap();
+        LocalHello {
+            uuid: id.uuid.clone(),
+            name: id.name.clone(),
+        }
+    }
 }
 
 /// 网络服务句柄。克隆廉价（内部 `Arc`）。
 #[derive(Clone)]
 pub struct NetworkService {
-    identity: DeviceIdentity,
     inner: Arc<Inner>,
-    _discovery: Arc<Discovery>,
 }
 
 impl NetworkService {
@@ -84,15 +97,18 @@ impl NetworkService {
         log::info!("TCP 监听已绑定: 0.0.0.0:{port}");
 
         let (events_tx, events_rx) = unbounded_channel();
+
+        // 启动 mDNS 发现。
+        let (discovery, mut disc_rx) = Discovery::start(&identity, port)?;
+
         let inner = Arc::new(Inner {
             devices: Mutex::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             events: events_tx,
+            identity: Mutex::new(identity),
+            discovery,
         });
-
-        // 启动 mDNS 发现。
-        let (discovery, mut disc_rx) = Discovery::start(&identity, port)?;
 
         // 后台：发现事件 → 设备表 + UI 事件。
         {
@@ -126,10 +142,6 @@ impl NetworkService {
         // 后台：接受入站连接 → 握手 → 抛出配对码。
         {
             let inner = Arc::clone(&inner);
-            let local = LocalHello {
-                uuid: identity.uuid.clone(),
-                name: identity.name.clone(),
-            };
             tokio::spawn(async move {
                 loop {
                     let (stream, _peer) = match listener.accept().await {
@@ -138,7 +150,8 @@ impl NetworkService {
                     };
                     log::debug!("接受入站连接: peer={_peer}");
                     let inner = Arc::clone(&inner);
-                    let local = local.clone();
+                    // 每次连接读实时身份，保证改名后握手发的是新名。
+                    let local = inner.local_hello();
                     tokio::spawn(async move {
                         match handshake(stream, &local).await {
                             Ok(session) => {
@@ -170,17 +183,28 @@ impl NetworkService {
             });
         }
 
-        let service = Self {
-            identity,
-            inner,
-            _discovery: Arc::new(discovery),
-        };
+        let service = Self { inner };
         Ok((service, events_rx))
     }
 
-    /// 本机身份。
-    pub fn identity(&self) -> &DeviceIdentity {
-        &self.identity
+    /// 本机身份快照（含当前显示名）。
+    pub fn identity(&self) -> DeviceIdentity {
+        self.inner.identity.lock().unwrap().clone()
+    }
+
+    /// 改名：更新本机身份并立即重新广播 mDNS（更新 TXT 中的 `name`），
+    /// 使对端无需等缓存过期即可看到新名；后续握手也会用新名。
+    pub fn rename(&self, new_name: &str) -> Result<(), NetworkError> {
+        {
+            let mut id = self.inner.identity.lock().unwrap();
+            id.name = new_name.to_string();
+        }
+        self.inner.discovery.update_name(new_name)
+    }
+
+    /// 主动注销 mDNS（发送 goodbye）并停止发现。退出前调用，让对端立即移除本机。
+    pub fn shutdown(&self) {
+        self.inner.discovery.shutdown();
     }
 
     /// 当前设备列表快照。
@@ -237,10 +261,7 @@ impl NetworkService {
         }
         let stream = stream.ok_or(last_err)?;
 
-        let local = LocalHello {
-            uuid: self.identity.uuid.clone(),
-            name: self.identity.name.clone(),
-        };
+        let local = self.inner.local_hello();
         let session = handshake(stream, &local).await?;
         let pin = session.pin.clone();
         let pairing_id = self.inner.next_id.fetch_add(1, Ordering::Relaxed);

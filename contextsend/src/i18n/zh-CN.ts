@@ -110,6 +110,10 @@ export default {
       seconds: '秒',
       alwaysOnTop: '窗口置顶',
       startMinimized: '启动时最小化到托盘',
+      globalShortcut: '显示/隐藏窗口快捷键',
+      shortcutUnset: '未设置',
+      shortcutRecording: '按下快捷键…',
+      shortcutConflict: '该快捷键无效或已被占用，请换一个',
       retention: '对话保存期限',
       retentionOptions: {
         '6h': '6 小时',

@@ -32,3 +32,7 @@ tokio.workspace = true
 cs-core.workspace = true
 cs-adapters.workspace = true
 cs-network.workspace = true
+
+# 全局快捷键：仅桌面端可用（移动端无全局热键概念）。
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"

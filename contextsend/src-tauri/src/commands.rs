@@ -78,12 +78,24 @@ pub fn get_self_identity(state: State<'_, AppState>) -> SelfIdentity {
     }
 }
 
-/// 给本机改名并持久化。
+/// 给本机改名并持久化，同时立即重新广播 mDNS，让对端实时看到新名。
 #[tauri::command]
 pub fn rename_self(state: State<'_, AppState>, new_name: String) -> Result<(), String> {
-    let mut id = state.identity.lock().unwrap();
-    id.rename(new_name, &state.identity_path)
-        .map_err(|e| e.to_string())
+    let applied = {
+        let mut id = state.identity.lock().unwrap();
+        id.rename(new_name.as_str(), &state.identity_path)
+            .map_err(|e| e.to_string())?;
+        id.name.clone()
+    };
+    // 网络服务就绪则同步更新 mDNS 广播与后续握手用名；未就绪时忽略
+    // （服务启动时会读取已持久化的最新名）。
+    if let Some(service) = state.service.get() {
+        if let Err(e) = service.rename(&applied) {
+            log::warn!("改名后重新广播 mDNS 失败: {e}");
+        }
+    }
+    log::info!("本机已改名: name={applied}");
+    Ok(())
 }
 
 /// 当前设备列表快照。

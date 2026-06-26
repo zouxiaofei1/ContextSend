@@ -111,6 +111,10 @@ export default {
       seconds: 's',
       alwaysOnTop: 'Always on top',
       startMinimized: 'Start minimized to tray',
+      globalShortcut: 'Show/Hide window shortcut',
+      shortcutUnset: 'Not set',
+      shortcutRecording: 'Press shortcut…',
+      shortcutConflict: 'That shortcut is invalid or already in use, try another',
       retention: 'Conversation Retention',
       retentionOptions: {
         '6h': '6 Hours',

@@ -17,6 +17,7 @@ import {
   DEFAULT_START_MINIMIZED,
   DEFAULT_CUSTOM_PORT,
   DEFAULT_CONNECTION_TIMEOUT,
+  DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_CONVERSATION_RETENTION,
   DEFAULT_MAX_CONVERSATION_COUNT,
   PORT_MIN,
@@ -29,7 +30,6 @@ import {
 } from '../constants'
 import type { RetentionValue } from '../constants'
 
-
 interface SettingsData {
   theme: 'light' | 'dark'
   accentColor: string
@@ -41,6 +41,7 @@ interface SettingsData {
   startMinimized: boolean
   customPort: number
   connectionTimeout: number
+  globalShortcut: string
   conversationRetention: RetentionValue
   maxConversationCount: number
 }
@@ -64,6 +65,10 @@ function loadSettings(): SettingsData {
           typeof parsed.connectionTimeout === 'number'
             ? parsed.connectionTimeout
             : DEFAULT_CONNECTION_TIMEOUT,
+        globalShortcut:
+          typeof parsed.globalShortcut === 'string'
+            ? parsed.globalShortcut
+            : DEFAULT_GLOBAL_SHORTCUT,
         conversationRetention: isRetentionValue(parsed.conversationRetention)
           ? parsed.conversationRetention
           : DEFAULT_CONVERSATION_RETENTION,
@@ -87,6 +92,7 @@ function loadSettings(): SettingsData {
     startMinimized: DEFAULT_START_MINIMIZED,
     customPort: DEFAULT_CUSTOM_PORT,
     connectionTimeout: DEFAULT_CONNECTION_TIMEOUT,
+    globalShortcut: DEFAULT_GLOBAL_SHORTCUT,
     conversationRetention: DEFAULT_CONVERSATION_RETENTION,
     maxConversationCount: DEFAULT_MAX_CONVERSATION_COUNT,
   }
@@ -113,6 +119,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const startMinimized = ref<boolean>(initial.startMinimized)
   const customPort = ref<number>(initial.customPort)
   const connectionTimeout = ref<number>(initial.connectionTimeout)
+  const globalShortcut = ref<string>(initial.globalShortcut)
   const conversationRetention = ref<RetentionValue>(initial.conversationRetention)
   const maxConversationCount = ref<number>(initial.maxConversationCount)
 
@@ -140,6 +147,12 @@ export const useSettingsStore = defineStore('settings', () => {
       }
     } catch {
       // autostart plugin 可能不可用
+    }
+    // 重新注册持久化的全局快捷键（空字符串等价于不注册）。
+    try {
+      await invoke(IPC.SET_GLOBAL_SHORTCUT, { accelerator: globalShortcut.value || null })
+    } catch {
+      // 热键可能被占用或后端未就绪；启动期静默，由用户在设置里重设。
     }
   }
 
@@ -203,6 +216,26 @@ export const useSettingsStore = defineStore('settings', () => {
     invoke(IPC.SET_CONNECTION_TIMEOUT, { timeoutSecs: connectionTimeout.value }).catch(() => {})
   }
 
+  /**
+   * 设置或清除「显示/隐藏主窗口」全局快捷键。
+   *
+   * 传空字符串清除热键。先经后端校验/注册，失败（语法非法或被占用）时回滚到旧值
+   * 并抛出错误信息，交由调用方提示用户。成功才更新本地状态并持久化。
+   */
+  async function setGlobalShortcut(accelerator: string): Promise<void> {
+    const next = accelerator.trim()
+    if (next === globalShortcut.value) return
+    const previous = globalShortcut.value
+    try {
+      await invoke(IPC.SET_GLOBAL_SHORTCUT, { accelerator: next || null })
+      globalShortcut.value = next
+    } catch (e) {
+      // 注册失败：保持旧值不变，向上抛出供 UI 提示。
+      globalShortcut.value = previous
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+  }
+
   function setConversationRetention(value: RetentionValue): void {
     conversationRetention.value = value
   }
@@ -231,10 +264,11 @@ export const useSettingsStore = defineStore('settings', () => {
       startMinimized,
       customPort,
       connectionTimeout,
+      globalShortcut,
       conversationRetention,
       maxConversationCount,
     ],
-    ([t, a, l, m, s, adv, atop, sm, port, timeout, retention, maxCount]) => {
+    ([t, a, l, m, s, adv, atop, sm, port, timeout, shortcut, retention, maxCount]) => {
       persist({
         theme: t,
         accentColor: a,
@@ -246,6 +280,7 @@ export const useSettingsStore = defineStore('settings', () => {
         startMinimized: sm,
         customPort: port,
         connectionTimeout: timeout,
+        globalShortcut: shortcut,
         conversationRetention: retention,
         maxConversationCount: maxCount,
       })
@@ -270,6 +305,7 @@ export const useSettingsStore = defineStore('settings', () => {
     startMinimized,
     customPort,
     connectionTimeout,
+    globalShortcut,
     conversationRetention,
     maxConversationCount,
     applyTheme,
@@ -283,6 +319,7 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleStartMinimized,
     setCustomPort,
     setConnectionTimeout,
+    setGlobalShortcut,
     setConversationRetention,
     setMaxConversationCount,
     syncBackend,
