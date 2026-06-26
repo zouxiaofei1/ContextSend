@@ -9,6 +9,7 @@ import { useToastStore } from '../stores/toast'
  *
  * - 焦点在输入框 / 文本域 / 可编辑元素时不拦截，保证正常粘贴/拖放不受影响。
  * - 空白文本忽略；过短片段由后端返回错误并经 toast 提示。
+ * - 窗口内部发起的拖拽（如选中文本后拖动）会被忽略，仅处理外部来源的拖入。
  *
  * 在 App 根组件挂载一次即可全局生效。
  */
@@ -17,12 +18,33 @@ export function useContextCapture(): void {
   const toast = useToastStore()
   const { t } = useI18n()
 
+  /**
+   * 标记当前拖拽是否源自窗口内部（选中文本拖拽等）。
+   * 若为 true，则 drop 时忽略，避免将内部拖拽误判为外部上下文拖入。
+   * 利用 HTML5 规范：dragstart 仅在拖拽起源于同一 document 时触发。
+   */
+  let isInternalDrag = false
+
   /** 目标是否为可编辑元素（此时让浏览器走默认粘贴/拖放，不拦截）。 */
   function isEditable(target: EventTarget | null): boolean {
     const el = target as HTMLElement | null
     if (!el || !el.tagName) return false
     const tag = el.tagName.toUpperCase()
     return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
+  }
+
+  /**
+   * 窗口内部发起的拖拽（如选中文本后拖动）会触发 dragstart；
+   * 外部拖入（从浏览器、文件管理器等）不会在窗口内触发此事件。
+   * 记录标记，供 onDrop 判断来源。
+   */
+  function onDragStart(_e: DragEvent): void {
+    isInternalDrag = true
+  }
+
+  /** 拖拽操作结束（drop 后或取消后），清除内部拖拽标记。 */
+  function onDragEnd(_e: DragEvent): void {
+    isInternalDrag = false
   }
 
   /** 执行匹配并入库。 */
@@ -51,6 +73,8 @@ export function useContextCapture(): void {
 
   function onDrop(e: DragEvent): void {
     if (isEditable(e.target)) return
+    // 忽略窗口内部发起的拖拽（如选中文本后拖动），仅处理外部来源的拖入
+    if (isInternalDrag) return
     const text = e.dataTransfer?.getData('text') ?? ''
     if (!text.trim()) return
     e.preventDefault()
@@ -69,11 +93,15 @@ export function useContextCapture(): void {
     window.addEventListener('paste', onPaste)
     window.addEventListener('drop', onDrop)
     window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragstart', onDragStart)
+    window.addEventListener('dragend', onDragEnd)
   })
 
   onUnmounted(() => {
     window.removeEventListener('paste', onPaste)
     window.removeEventListener('drop', onDrop)
     window.removeEventListener('dragover', onDragOver)
+    window.removeEventListener('dragstart', onDragStart)
+    window.removeEventListener('dragend', onDragEnd)
   })
 }

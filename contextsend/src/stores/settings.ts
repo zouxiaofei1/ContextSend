@@ -5,10 +5,11 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart'
 import type { Locale } from '../i18n'
 import {
-  ACCENT_COLORS,
+  THEMES,
+  buildThemeVars,
   LS_SETTINGS,
-  DEFAULT_THEME,
-  DEFAULT_ACCENT_COLOR,
+  DEFAULT_THEME_ID,
+  LEGACY_ACCENT_TO_THEME,
   DEFAULT_LOCALE,
   DEFAULT_MINIMIZE_TO_TRAY,
   DEFAULT_AUTO_START,
@@ -31,8 +32,7 @@ import {
 import type { RetentionValue } from '../constants'
 
 interface SettingsData {
-  theme: 'light' | 'dark'
-  accentColor: string
+  themeId: string
   locale: Locale
   minimizeToTray: boolean
   autoStart: boolean
@@ -50,10 +50,9 @@ function loadSettings(): SettingsData {
   try {
     const raw = localStorage.getItem(LS_SETTINGS)
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<SettingsData>
+      const parsed = JSON.parse(raw) as Partial<SettingsData> & { accentColor?: string }
       return {
-        theme: parsed.theme === 'light' ? 'light' : DEFAULT_THEME,
-        accentColor: parsed.accentColor || DEFAULT_ACCENT_COLOR,
+        themeId: resolveThemeId(parsed.themeId, parsed.accentColor),
         locale: parsed.locale === 'en-US' ? 'en-US' : DEFAULT_LOCALE,
         minimizeToTray: parsed.minimizeToTray !== false,
         autoStart: parsed.autoStart === true,
@@ -82,8 +81,7 @@ function loadSettings(): SettingsData {
     // ignore corrupt data
   }
   return {
-    theme: DEFAULT_THEME,
-    accentColor: DEFAULT_ACCENT_COLOR,
+    themeId: DEFAULT_THEME_ID,
     locale: DEFAULT_LOCALE,
     minimizeToTray: DEFAULT_MINIMIZE_TO_TRAY,
     autoStart: DEFAULT_AUTO_START,
@@ -102,6 +100,18 @@ function isRetentionValue(v: unknown): v is RetentionValue {
   return v === '6h' || v === '1d' || v === '7d' || v === '30d' || v === 'unlimited'
 }
 
+/**
+ * 解析持久化的主题：优先用新版 themeId；否则尝试从旧版 accentColor（hex）迁移；
+ * 都无效时回退默认主题。
+ */
+function resolveThemeId(themeId: string | undefined, legacyAccent: string | undefined): string {
+  if (themeId && THEMES.some((t) => t.id === themeId)) return themeId
+  if (legacyAccent && LEGACY_ACCENT_TO_THEME[legacyAccent]) {
+    return LEGACY_ACCENT_TO_THEME[legacyAccent]
+  }
+  return DEFAULT_THEME_ID
+}
+
 function persist(data: SettingsData): void {
   localStorage.setItem(LS_SETTINGS, JSON.stringify(data))
 }
@@ -109,8 +119,15 @@ function persist(data: SettingsData): void {
 export const useSettingsStore = defineStore('settings', () => {
   const initial = loadSettings()
 
-  const theme = ref<'light' | 'dark'>(initial.theme)
-  const accentColor = ref<string>(initial.accentColor)
+  const themeId = ref<string>(initial.themeId)
+  // 深浅模式跟随系统：不持久化，由 prefers-color-scheme 派生并实时跟随。
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  const colorScheme = ref<'light' | 'dark'>(media.matches ? 'dark' : 'light')
+  media.addEventListener('change', (e) => {
+    colorScheme.value = e.matches ? 'dark' : 'light'
+    applyTheme()
+  })
+
   const locale = ref<Locale>(initial.locale)
   const minimizeToTray = ref<boolean>(initial.minimizeToTray)
   const autoStart = ref<boolean>(initial.autoStart)
@@ -123,12 +140,14 @@ export const useSettingsStore = defineStore('settings', () => {
   const conversationRetention = ref<RetentionValue>(initial.conversationRetention)
   const maxConversationCount = ref<number>(initial.maxConversationCount)
 
-  /** 将 CSS 变量和 data-theme 应用至 DOM。 */
+  /** 将 CSS 变量和 data-theme 应用至 DOM。深浅由系统决定，配色由命名主题决定。 */
   function applyTheme(): void {
-    document.documentElement.setAttribute('data-theme', theme.value)
-    document.documentElement.style.setProperty('--accent', accentColor.value)
-    const entry = ACCENT_COLORS.find((c) => c.hex === accentColor.value)
-    document.documentElement.style.setProperty('--accent-hover', entry?.hover || accentColor.value)
+    document.documentElement.setAttribute('data-theme', colorScheme.value)
+    const theme = THEMES.find((t) => t.id === themeId.value) ?? THEMES[0]
+    const vars = buildThemeVars(theme, colorScheme.value)
+    for (const [key, value] of Object.entries(vars)) {
+      document.documentElement.style.setProperty(key, value)
+    }
   }
 
   /** 将 minimizeToTray 和 autoStart 同步到 Rust 后端。 */
@@ -156,14 +175,9 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  function toggleTheme(): void {
-    theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  }
-
-  function setAccentColor(hex: string): void {
-    const entry = ACCENT_COLORS.find((c) => c.hex === hex)
-    if (!entry) return
-    accentColor.value = hex
+  function setThemeId(id: string): void {
+    if (!THEMES.some((t) => t.id === id)) return
+    themeId.value = id
   }
 
   function setLocale(loc: Locale): void {
@@ -254,8 +268,7 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 持久化所有设置到 localStorage，并同步 DOM 主题 + 后端。 */
   watch(
     [
-      theme,
-      accentColor,
+      themeId,
       locale,
       minimizeToTray,
       autoStart,
@@ -268,10 +281,9 @@ export const useSettingsStore = defineStore('settings', () => {
       conversationRetention,
       maxConversationCount,
     ],
-    ([t, a, l, m, s, adv, atop, sm, port, timeout, shortcut, retention, maxCount]) => {
+    ([tid, l, m, s, adv, atop, sm, port, timeout, shortcut, retention, maxCount]) => {
       persist({
-        theme: t,
-        accentColor: a,
+        themeId: tid,
         locale: l,
         minimizeToTray: m,
         autoStart: s,
@@ -295,8 +307,8 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   return {
-    theme,
-    accentColor,
+    themeId,
+    colorScheme,
     locale,
     minimizeToTray,
     autoStart,
@@ -309,8 +321,7 @@ export const useSettingsStore = defineStore('settings', () => {
     conversationRetention,
     maxConversationCount,
     applyTheme,
-    toggleTheme,
-    setAccentColor,
+    setThemeId,
     setLocale,
     toggleMinimizeToTray,
     toggleAutoStart,

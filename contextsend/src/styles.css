@@ -2,30 +2,30 @@
 
 /* 暗色主题（默认） */
 [data-theme='dark'] {
-  --bg-primary: #1b1d22;
-  --bg-secondary: #24272e;
-  --bg-tertiary: #2c2f37;
+  --bg-primary: #121317;
+  --bg-secondary: #181a1f;
+  --bg-tertiary: #1e2127;
   --text-primary: #e6e6e6;
   --text-secondary: #9aa0aa;
-  --border: #30343c;
+  --border: #262930;
   --danger: #ff7a7a;
   --success: #7ad88a;
   --warning: #f59e0b;
-  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow: rgba(0, 0, 0, 0.45);
 }
 
 /* 亮色主题 */
 [data-theme='light'] {
-  --bg-primary: #f5f5f5;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #e8e8e8;
+  --bg-primary: #ebebeb;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #dedede;
   --text-primary: #1a1a1a;
   --text-secondary: #6b6b6b;
-  --border: #d4d4d4;
+  --border: #cacaca;
   --danger: #d32f2f;
   --success: #388e3c;
   --warning: #d97706;
-  --shadow: rgba(0, 0, 0, 0.08);
+  --shadow: rgba(0, 0, 0, 0.10);
 }
 
 /* 主题色（由 JS 动态注入，此处为回退值） */

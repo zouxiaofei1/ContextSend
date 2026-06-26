@@ -2,8 +2,23 @@ import type { Locale } from '../i18n'
 
 // ---- 默认值（与 loadSettings 兜底 return 保持一致） ----
 
-export const DEFAULT_THEME = 'dark' as const
-export const DEFAULT_ACCENT_COLOR = '#4C7CF3'
+/** 默认命名主题 id（深浅模式跟随系统，不在此设置）。 */
+export const DEFAULT_THEME_ID = 'midnight'
+
+/** 旧版 accentColor（hex）→ 新命名主题 id 的迁移映射。 */
+export const LEGACY_ACCENT_TO_THEME: Record<string, string> = {
+  '#4C7CF3': 'midnight',
+  '#6366F1': 'midnight',
+  '#8B5CF6': 'midnight',
+  '#EC4899': 'dawn',
+  '#EF4444': 'dusk',
+  '#F97316': 'dusk',
+  '#D97706': 'dusk',
+  '#10B981': 'midnight',
+  '#14B8A6': 'midnight',
+  '#06B6D4': 'midnight',
+}
+
 export const DEFAULT_LOCALE: Locale = 'zh-CN'
 export const DEFAULT_MINIMIZE_TO_TRAY = true
 export const DEFAULT_AUTO_START = false

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../../stores/app'
 import { useToastStore } from '../../stores/toast'
 import { useSettingsStore } from '../../stores/settings'
-import { ACCENT_COLORS } from '../../constants'
+import { THEMES } from '../../constants'
 import { SUPPORTED_LOCALES } from '../../i18n'
 import type { Locale } from '../../i18n'
 import { generateRandomName } from '../../utils/nameGenerator'
@@ -69,7 +69,12 @@ function onLocaleChange(loc: Locale): void {
   settings.setLocale(loc)
 }
 
-const accentOptions = computed(() => ACCENT_COLORS.map((c) => ({ value: c.hex, label: c.name })))
+const themeOptions = computed(() =>
+  THEMES.map((th) => ({
+    value: th.id,
+    label: th.nameEn,
+  })),
+)
 
 const localeOptions = SUPPORTED_LOCALES.map((l) => ({
   value: l,
@@ -79,27 +84,17 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
 
 <template>
   <SettingsSection :title="t('settings.general')">
-    <!-- 主题：亮/暗 -->
+    <!-- 主题（命名主题；深浅跟随系统） -->
     <SettingRow :label="t('settings.theme.label')">
-      <span class="muted setting-option" :class="{ active: settings.theme === 'dark' }">
-        {{ t('settings.theme.dark') }}
-      </span>
-      <SettingToggle
-        :model-value="settings.theme === 'light'"
-        @update:model-value="settings.toggleTheme()"
-      />
-      <span class="muted setting-option" :class="{ active: settings.theme === 'light' }">
-        {{ t('settings.theme.light') }}
-      </span>
-    </SettingRow>
-
-    <!-- 主题色选择 -->
-    <SettingRow :label="t('settings.accentColor')">
+      <template #label>
+        <span>{{ t('settings.theme.label') }}</span>
+        <span class="muted theme-hint">{{ t('settings.theme.followSystem') }}</span>
+      </template>
       <SettingSelect
-        :model-value="settings.accentColor"
-        :options="accentOptions"
+        :model-value="settings.themeId"
+        :options="themeOptions"
         min-width="160px"
-        @update:model-value="settings.setAccentColor($event)"
+        @update:model-value="settings.setThemeId($event)"
       />
     </SettingRow>
 
@@ -158,14 +153,8 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
 </template>
 
 <style scoped>
-.setting-option {
-  font-size: 0.8rem;
-  transition: color 0.15s;
-}
-
-.setting-option.active {
-  color: var(--text-primary);
-  font-weight: 600;
+.theme-hint {
+  font-size: 0.75rem;
 }
 
 .rename-control {

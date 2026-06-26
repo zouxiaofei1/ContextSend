@@ -24,18 +24,88 @@ export const TOAST_DURATION: Record<ToastType, number> = {
   error: 5000,
 }
 
-// ---- 主题 ----
+export interface ThemeVariant {
+  accent: string
+  accentHover: string
+}
+export interface Theme {
+  id: string
+  /** 显示名（英语） */
+  name: string
+  /** 英文显示名（与 name 保持一致） */
+  nameEn: string
+  dark: ThemeVariant
+  light: ThemeVariant
+}
 
-/** 预设主题色板 */
-export const ACCENT_COLORS: { hex: string; hover: string; name: string }[] = [
-  { hex: '#4C7CF3', hover: '#3A5FD9', name: '经典蓝 Classic Blue' },
-  { hex: '#6366F1', hover: '#4F46E5', name: '靛蓝紫 Indigo' },
-  { hex: '#8B5CF6', hover: '#7C3AED', name: '紫罗兰 Violet' },
-  { hex: '#EC4899', hover: '#DB2777', name: '玫红 Rose' },
-  { hex: '#EF4444', hover: '#DC2626', name: '赤红 Red' },
-  { hex: '#F97316', hover: '#EA580C', name: '活力橙 Orange' },
-  { hex: '#D97706', hover: '#B45309', name: '琥珀金 Amber' },
-  { hex: '#10B981', hover: '#059669', name: '翠绿 Emerald' },
-  { hex: '#14B8A6', hover: '#0D9488', name: '青碧 Teal' },
-  { hex: '#06B6D4', hover: '#0891B2', name: '天蓝 Cyan' },
+export const THEMES: Theme[] = [
+  {
+    id: 'midnight',
+    name: 'Midnight',
+    nameEn: 'Midnight',
+    dark: { accent: '#6E8BFA', accentHover: '#566FE0' },
+    light: { accent: '#3F5BD9', accentHover: '#3147B8' },
+  },
+  {
+    id: 'dawn',
+    name: 'Dawn',
+    nameEn: 'Dawn',
+    dark: { accent: '#F472B6', accentHover: '#E85AA0' },
+    light: { accent: '#DB2777', accentHover: '#BE1D63' },
+  },
+  {
+    id: 'dusk',
+    name: 'Dusk',
+    nameEn: 'Dusk',
+    dark: { accent: '#FB923C', accentHover: '#F47A20' },
+    light: { accent: '#EA580C', accentHover: '#C2480A' },
+  },
 ]
+
+/** 各模式背景的中性基色（与 styles.css 的回退值保持一致）。 */
+const NEUTRALS = {
+  dark: { primary: '#121317', secondary: '#181a1f', tertiary: '#1e2127', border: '#262930' },
+  light: { primary: '#ebebeb', secondary: '#f5f5f5', tertiary: '#dedede', border: '#cacaca' },
+} as const
+
+/** 强调色混入背景的比例（加深着色，让背景带有更强的主题倾向）。 */
+const TINT = {
+  dark: { primary: 0.03, secondary: 0.05, tertiary: 0.10, border: 0.15 },
+  light: { primary: 0.06, secondary: 0.06, tertiary: 0.10, border: 0.15 },
+} as const
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ]
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const c = (n: number) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0')
+  return `#${c(r)}${c(g)}${c(b)}`
+}
+
+/** 将 accent 按比例 t 混入 base，返回 hex。 */
+function mix(base: string, accent: string, t: number): string {
+  const [br, bg, bb] = hexToRgb(base)
+  const [ar, ag, ab] = hexToRgb(accent)
+  return rgbToHex(br + (ar - br) * t, bg + (ag - bg) * t, bb + (ab - bb) * t)
+}
+
+/** 由主题与模式派生出全部主题相关 CSS 变量。 */
+export function buildThemeVars(theme: Theme, mode: 'light' | 'dark'): Record<string, string> {
+  const v = theme[mode]
+  const n = NEUTRALS[mode]
+  const t = TINT[mode]
+  return {
+    '--accent': v.accent,
+    '--accent-hover': v.accentHover,
+    '--bg-primary': mix(n.primary, v.accent, t.primary),
+    '--bg-secondary': mix(n.secondary, v.accent, t.secondary),
+    '--bg-tertiary': mix(n.tertiary, v.accent, t.tertiary),
+    '--border': mix(n.border, v.accent, t.border),
+  }
+}
