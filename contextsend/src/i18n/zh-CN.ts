@@ -4,7 +4,7 @@ export default {
     subtitle: '局域网内分享本地 Chat AI 上下文',
   },
   sidebar: {
-    receive: '接收',
+    receive: '对话',
     devices: '设备',
     settings: '设置',
   },

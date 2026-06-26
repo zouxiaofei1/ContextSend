@@ -16,7 +16,10 @@ function openGitHub(): void {
     <h1 class="about-title">ContextSend</h1>
     <div class="about-meta">
       <a class="about-link" @click.prevent="openGitHub">GitHub</a>
-      <span class="about-version">Ver {{ app.info.version }} ({{ app.info.platform }})</span>
+      <span
+        class="about-version"
+        :title="`Build ${app.info.buildNumber}`"
+      >Ver {{ app.info.version }} ({{ app.info.platform }})</span>
       <span class="about-license">MIT</span>
     </div>
   </section>

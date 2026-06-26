@@ -39,10 +39,12 @@ impl AppState {
 
 /// 返回给前端的应用基础信息。
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppInfo {
     pub version: String,
     pub platform: String,
     pub adapters: Vec<String>,
+    pub build_number: u32,
 }
 
 /// 获取应用信息。
@@ -55,6 +57,7 @@ pub fn get_app_info() -> AppInfo {
             .into_iter()
             .map(String::from)
             .collect(),
+        build_number: env!("BUILD_NUMBER").parse().unwrap_or(0),
     }
 }
 

@@ -20,7 +20,7 @@ const { isPortrait, isCompact } = useLayout()
 // 全局：在窗口任意位置粘贴 / 拖入文本即匹配回本地会话并入库。
 useContextCapture()
 
-const activeTab = ref<string>(TAB_RECEIVE)
+const activeTab = ref<string>(TAB_DEVICES)
 
 /** 面板懒加载映射 */
 const panelMap: Record<string, unknown> = {

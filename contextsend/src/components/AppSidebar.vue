@@ -21,8 +21,8 @@ const app = useAppStore()
 const { t } = useI18n()
 
 const navItems = [
-  { id: TAB_RECEIVE, icon: iconReceive, label: t('sidebar.receive') },
   { id: TAB_DEVICES, icon: iconDevices, label: t('sidebar.devices') },
+  { id: TAB_RECEIVE, icon: iconReceive, label: t('sidebar.receive') },
   { id: TAB_SETTINGS, icon: iconSettings, label: t('sidebar.settings') },
 ]
 
@@ -97,8 +97,8 @@ function onNavKeydown(e: KeyboardEvent) {
 
 <style scoped>
 .sidebar {
-  width: 220px;
-  min-width: 220px;
+  width: 187px;
+  min-width: 187px;
   height: 100%;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);

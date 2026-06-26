@@ -9,6 +9,7 @@ export interface AppInfo {
   version: string
   platform: string
   adapters: string[]
+  buildNumber: number
 }
 
 /** 本机身份。 */

@@ -4,7 +4,7 @@ export default {
     subtitle: 'Share local Chat AI context over LAN',
   },
   sidebar: {
-    receive: 'Receive',
+    receive: 'Context',
     devices: 'Devices',
     settings: 'Settings',
   },
