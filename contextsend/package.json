@@ -1,7 +1,7 @@
 {
   "name": "contextsend",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "sync-version": "node scripts/sync-version.mjs",
@@ -20,6 +20,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-store": "^2.4.3",
     "@vscode/markdown-it-katex": "^1.1.2",
     "dompurify": "^3.4.11",

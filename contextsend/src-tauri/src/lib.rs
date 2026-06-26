@@ -8,20 +8,41 @@ mod shortcut;
 mod tray;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use commands::AppState;
 use cs_network::{DeviceIdentity, NetEvent, NetworkService};
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, Manager, WebviewUrl, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as _;
 use tokio::sync::OnceCell;
+
+/// 应用数据根目录：所有持久化文件（identity、store、日志、WebView2 缓存）
+/// 统一存放于 `%LOCALAPPDATA%\ContextSend\`（Windows）或对应平台 local data 目录。
+///
+/// 调试用：设置 `CONTEXTSEND_DATA_DIR` 可覆盖，便于同机多实例。
+pub fn data_root() -> PathBuf {
+    match std::env::var_os("CONTEXTSEND_DATA_DIR") {
+        Some(custom) => PathBuf::from(custom),
+        None => dirs::data_local_dir()
+            .expect("无法获取系统 LocalAppData 目录")
+            .join("ContextSend"),
+    }
+}
 
 /// 应用主入口，由 `main.rs`（桌面）调用。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let root = data_root();
+    std::fs::create_dir_all(&root).expect("无法创建数据目录");
+
+    // 日志插件需要在 Builder 之前构建（需要 root 路径）。
+    let log_plugin = build_log_plugin(&root);
+
     tauri::Builder::default()
-        .plugin(build_log_plugin())
+        .plugin(log_plugin)
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -30,19 +51,30 @@ pub fn run() {
         .setup(|app| {
             tray::setup_tray(app)?;
 
+            // 编程创建主窗口，显式指定 WebView2 数据目录到统一的 data_root()。
+            let dir = data_root();
+            tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                WebviewUrl::default(),
+            )
+            .title("ContextSend 上下文分享")
+            .inner_size(960.0, 680.0)
+            .min_inner_size(300.0, 500.0)
+            .resizable(true)
+            .decorations(false)
+            .visible(false)
+            .drag_and_drop(false)
+            .data_directory(dir.clone())
+            .build()?;
+
             // 全局快捷键插件（仅桌面端）：注册「显示/隐藏主窗口」回调。
             // 具体热键由前端启动时经 set_global_shortcut 动态注册。
             #[cfg(desktop)]
             app.handle().plugin(shortcut::init_plugin())?;
 
-            // 身份持久化到 app 数据目录。
-            // 调试用：设置 CONTEXTSEND_DATA_DIR 可覆盖数据目录，便于同机开多个实例
-            // （不同目录 → 不同 identity.json → 不同 UUID → 能互相发现/配对）。
-            let dir = match std::env::var_os("CONTEXTSEND_DATA_DIR") {
-                Some(custom) => std::path::PathBuf::from(custom),
-                None => app.path().app_data_dir()?,
-            };
-            std::fs::create_dir_all(&dir)?;
+            migrate_legacy_data(app, &dir);
+
             let identity_path = dir.join("identity.json");
             let identity = DeviceIdentity::load_or_create(&identity_path)?;
             log::info!(
@@ -138,6 +170,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
+            commands::get_data_dir,
             commands::get_self_identity,
             commands::rename_self,
             commands::list_devices,
@@ -149,6 +182,7 @@ pub fn run() {
             commands::export_openai,
             commands::import_to_app,
             commands::match_context,
+            commands::save_export,
             commands::set_minimize_to_tray,
             shortcut::set_global_shortcut,
         ])
@@ -156,27 +190,24 @@ pub fn run() {
         .expect("启动 ContextSend 失败");
 }
 
-/// 构造日志插件：同时输出到终端(开发)与日志文件(`app_log_dir/ContextSend.log`)。
+/// 构造日志插件：同时输出到终端(开发)与日志文件(`<root>/logs/ContextSend.log`)。
 ///
 /// 级别策略：本应用各 crate（`contextsend_lib` / `cs_network` / `cs_adapters` /
 /// `cs_core`）默认 `Debug`，第三方依赖（mDNS、tungstenite 等）压到 `Warn`，
 /// 避免底层库刷屏淹没业务日志。隐私：业务埋点只记元信息（条数/字节/耗时/设备名/
 /// 应用名/UUID），不记录对话正文与配对码。
-fn build_log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+fn build_log_plugin<R: tauri::Runtime>(root: &std::path::Path) -> tauri::plugin::TauriPlugin<R> {
     use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 
     tauri_plugin_log::Builder::new()
-        // 时间戳用本地时区（默认是 UTC，会与本地时间差几个小时）。
         .timezone_strategy(TimezoneStrategy::UseLocal)
         .targets([
-            // 终端输出：开发期实时查看。
             Target::new(TargetKind::Stdout),
-            // 文件输出：滚动写入 app 日志目录，便于事后排查（双机调试时各实例独立）。
-            Target::new(TargetKind::LogDir {
+            Target::new(TargetKind::Folder {
+                path: root.join("logs"),
                 file_name: Some("ContextSend".into()),
             }),
         ])
-        // 全局默认 Info；本项目 crate 提到 Debug；噪声大的底层库压到 Warn。
         .level(log::LevelFilter::Info)
         .level_for("contextsend_lib", log::LevelFilter::Debug)
         .level_for("cs_network", log::LevelFilter::Debug)
@@ -186,4 +217,30 @@ fn build_log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
         .level_for("tungstenite", log::LevelFilter::Warn)
         .level_for("tokio_tungstenite", log::LevelFilter::Warn)
         .build()
+}
+
+/// 从旧版数据目录（`%APPDATA%\dev.contextsend.app`）迁移文件到新目录。
+/// 仅在新目录尚无 identity.json 时执行（避免重复迁移）。
+fn migrate_legacy_data(app: &tauri::App, new_dir: &std::path::Path) {
+    let legacy_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    if !legacy_dir.exists() || legacy_dir == *new_dir {
+        return;
+    }
+    if new_dir.join("identity.json").exists() {
+        return;
+    }
+    let files = ["identity.json", "segments.json", "permissions.json", "devices.json"];
+    for name in &files {
+        let src = legacy_dir.join(name);
+        if src.exists() {
+            if let Err(e) = std::fs::copy(&src, new_dir.join(name)) {
+                log::warn!("迁移 {name} 失败: {e}");
+            } else {
+                log::info!("已迁移: {name}");
+            }
+        }
+    }
 }

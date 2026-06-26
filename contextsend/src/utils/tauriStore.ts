@@ -1,17 +1,32 @@
 import { load, type Store } from '@tauri-apps/plugin-store'
+import { invoke } from '@tauri-apps/api/core'
+import { IPC } from '../constants'
+
+let dataDirCache: string | null = null
+
+async function getDataDir(): Promise<string> {
+  if (!dataDirCache) {
+    dataDirCache = await invoke<string>(IPC.GET_DATA_DIR)
+  }
+  return dataDirCache
+}
 
 /**
  * 懒加载的 Tauri plugin-store（磁盘 JSON）包装：首次访问时 `load`，之后复用同一句柄。
  * get/set 失败仅 `console.error` 记录、不抛出，避免阻断 UI。
  *
- * 抽出自原 `stores/app.ts` 中 segments / permissions 各自重复的
- * persist / load 逻辑（四份模板合一）。
+ * 文件存储位置统一在应用数据根目录（`%LOCALAPPDATA%\ContextSend\`）下。
  */
 export function createPersistentStore(file: string) {
   let store: Store | null = null
 
   async function ensure(): Promise<Store> {
-    if (!store) store = await load(file, { defaults: {}, autoSave: false })
+    if (!store) {
+      const dir = await getDataDir()
+      const sep = dir.includes('\\') ? '\\' : '/'
+      const absPath = `${dir}${sep}${file}`
+      store = await load(absPath, { defaults: {}, autoSave: false })
+    }
     return store
   }
 

@@ -4,6 +4,7 @@
  */
 export const IPC = {
   GET_APP_INFO: 'get_app_info',
+  GET_DATA_DIR: 'get_data_dir',
   GET_SELF_IDENTITY: 'get_self_identity',
   LIST_DEVICES: 'list_devices',
   RENAME_SELF: 'rename_self',
@@ -15,6 +16,7 @@ export const IPC = {
   EXPORT_OPENAI: 'export_openai',
   IMPORT_TO_APP: 'import_to_app',
   MATCH_CONTEXT: 'match_context',
+  SAVE_EXPORT: 'save_export',
   SET_MINIMIZE_TO_TRAY: 'set_minimize_to_tray',
   SET_NETWORK_PORT: 'set_network_port',
   SET_CONNECTION_TIMEOUT: 'set_connection_timeout',

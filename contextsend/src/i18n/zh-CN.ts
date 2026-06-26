@@ -57,6 +57,13 @@ export default {
     toggleFold: '折叠 / 展开',
     preview: '预览',
     viewSource: '源码',
+    exportAs: '导出为',
+    exportJson: 'OpenAI JSON',
+    exportMarkdown: 'Markdown',
+    exportHtml: 'HTML',
+    exportPdf: 'PDF',
+    exportSaved: '已导出到文件',
+    exportFailed: '导出失败：{error}',
   },
   device: {
     title: '设备列表',

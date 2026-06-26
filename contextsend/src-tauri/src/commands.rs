@@ -284,3 +284,22 @@ pub async fn match_context(snippet: String) -> Result<MatchOutcome, String> {
 pub fn set_minimize_to_tray(state: State<'_, AppState>, enabled: bool) {
     *state.minimize_to_tray.lock().unwrap() = enabled;
 }
+
+/// 获取应用数据根目录的绝对路径（前端 plugin-store 用于拼文件路径）。
+#[tauri::command]
+pub fn get_data_dir() -> String {
+    crate::data_root().to_string_lossy().into_owned()
+}
+
+/// 把导出内容写入用户选定的文件路径。
+///
+/// 路径由前端 plugin-dialog 的「另存为」对话框取得（用户显式选择），故用
+/// Rust 原生 `std::fs` 直接写盘，绕过只读 capabilities（与 adapter 导入同一模式）。
+#[tauri::command]
+pub fn save_export(path: String, contents: String) -> Result<(), String> {
+    log::info!("导出对话到文件: path={path} bytes={}", contents.len());
+    std::fs::write(&path, contents).map_err(|e| {
+        log::warn!("导出写盘失败: path={path} err={e}");
+        e.to_string()
+    })
+}

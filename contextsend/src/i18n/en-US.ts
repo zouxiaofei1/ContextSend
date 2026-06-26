@@ -58,6 +58,13 @@ export default {
     toggleFold: 'Collapse / expand',
     preview: 'Preview',
     viewSource: 'Source',
+    exportAs: 'Export as',
+    exportJson: 'OpenAI JSON',
+    exportMarkdown: 'Markdown',
+    exportHtml: 'HTML',
+    exportPdf: 'PDF',
+    exportSaved: 'Exported to file',
+    exportFailed: 'Export failed: {error}',
   },
   device: {
     title: 'Devices',

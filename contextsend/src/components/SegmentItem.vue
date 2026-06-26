@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 单段对话卡片：头部（标题/来源/计数）+ 展开后的消息体 + 操作区。
 // 操作区为「编辑 / 复制 / 删除 / 更多」，更多下拉含设为推送源、导入到 Jan / ChatBox。
+// 右键卡片弹出导出菜单：OpenAI JSON / Markdown / HTML / PDF。
 // - 复制：拼成「title:… / role:content …」的纯文本。
 // - 编辑：弹出悬浮窗，Title 与每条消息各一个输入框，保存回写该段对话。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -8,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore, type ChatMessage, type ConversationSegment } from '../stores/app'
 import { useToastStore } from '../stores/toast'
 import { ADAPTER_JAN, ADAPTER_CHATBOX } from '../constants'
+import { exportConversation, type ExportFormat } from '../utils/conversationExport'
 import MarkdownContent from './MarkdownContent.vue'
 
 const props = defineProps<{ segment: ConversationSegment; expanded: boolean; unread: boolean }>()
@@ -22,6 +24,9 @@ const editing = ref(false)
 const editTitle = ref('')
 const editContents = ref<string[]>([])
 const menuWrap = ref<HTMLElement | null>(null)
+
+// 右键导出菜单：屏幕坐标定位，Teleport 到 body。
+const ctxMenu = ref<{ x: number; y: number } | null>(null)
 
 const isPushSource = computed(() => app.selectedSegmentId === props.segment.id)
 
@@ -123,18 +128,55 @@ function importChatBox(): void {
   showMenu.value = false
 }
 
+/** 右键卡片：在鼠标位置打开导出菜单（夹紧到视口内）。 */
+function openContextMenu(e: MouseEvent): void {
+  showMenu.value = false
+  const x = Math.min(e.clientX, window.innerWidth - 180)
+  const y = Math.min(e.clientY, window.innerHeight - 180)
+  ctxMenu.value = { x, y }
+}
+
+function closeContextMenu(): void {
+  ctxMenu.value = null
+}
+
+/** 执行导出：选定格式后另存（PDF 走打印框），成功后提示。 */
+async function doExport(format: ExportFormat): Promise<void> {
+  closeContextMenu()
+  try {
+    const saved = await exportConversation(props.segment.conversation, format)
+    if (saved && format !== 'pdf') toast.success(t('receive.exportSaved'))
+  } catch (e) {
+    toast.error(t('receive.exportFailed', { error: String(e) }))
+  }
+}
+
 // 点击下拉菜单外部时关闭。
 function onDocClick(e: MouseEvent): void {
   if (showMenu.value && menuWrap.value && !menuWrap.value.contains(e.target as Node)) {
     showMenu.value = false
   }
+  if (ctxMenu.value) closeContextMenu()
 }
-onMounted(() => document.addEventListener('click', onDocClick))
-onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+function onEsc(e: KeyboardEvent): void {
+  if (e.key === 'Escape') closeContextMenu()
+}
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onEsc)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onEsc)
+})
 </script>
 
 <template>
-  <li class="seg-item" :class="{ 'seg-item--unread': unread }">
+  <li
+    class="seg-item"
+    :class="{ 'seg-item--unread': unread }"
+    @contextmenu.prevent="openContextMenu"
+  >
     <div class="seg-head" @click="$emit('toggle')">
       <span class="seg-toggle muted">{{ expanded ? '▲' : '▼' }}</span>
       <span class="seg-title">{{ segTitle }}</span>
@@ -188,6 +230,25 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
             <button class="small" @click="saveEdit">{{ t('receive.save') }}</button>
           </div>
         </div>
+      </div>
+    </Teleport>
+
+    <!-- 右键导出菜单 -->
+    <Teleport to="body">
+      <div
+        v-if="ctxMenu"
+        class="ctx-menu"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+        @click.stop
+        @contextmenu.prevent
+      >
+        <div class="ctx-title">{{ t('receive.exportAs') }}</div>
+        <button class="menu-item" @click="doExport('json')">{{ t('receive.exportJson') }}</button>
+        <button class="menu-item" @click="doExport('markdown')">
+          {{ t('receive.exportMarkdown') }}
+        </button>
+        <button class="menu-item" @click="doExport('html')">{{ t('receive.exportHtml') }}</button>
+        <button class="menu-item" @click="doExport('pdf')">{{ t('receive.exportPdf') }}</button>
       </div>
     </Teleport>
   </li>
@@ -314,6 +375,28 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .menu-item:hover {
   background: rgba(127, 127, 127, 0.12);
   color: var(--accent);
+}
+
+/* 右键导出菜单 */
+.ctx-menu {
+  position: fixed;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.25rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.ctx-title {
+  font-size: 0.68rem;
+  color: var(--text-secondary, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.3rem 0.55rem 0.2rem;
 }
 
 /* 编辑悬浮窗 */
