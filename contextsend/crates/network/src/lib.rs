@@ -49,6 +49,8 @@ pub enum NetworkError {
     Crypto(String),
     #[error("mDNS 错误: {0}")]
     Mdns(String),
+    #[error("无效的设备名: {0}")]
+    InvalidName(String),
     #[error("序列化错误: {0}")]
     Serde(#[from] serde_json::Error),
 }

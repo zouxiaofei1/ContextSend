@@ -8,6 +8,7 @@ import { ACCENT_COLORS } from '../../constants'
 import { SUPPORTED_LOCALES } from '../../i18n'
 import type { Locale } from '../../i18n'
 import { generateRandomName } from '../../utils/nameGenerator'
+import { validateName } from '../../utils/nameValidation'
 import SettingsSection from './SettingsSection.vue'
 import SettingRow from './SettingRow.vue'
 import SettingToggle from './SettingToggle.vue'
@@ -28,18 +29,39 @@ watch(
   },
 )
 
-async function onRenameBlur(): Promise<void> {
-  const name = renameText.value.trim()
-  if (!name || name === app.identity?.name) {
+async function applyRename(name: string): Promise<void> {
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === app.identity?.name) {
     renameText.value = app.identity?.name ?? ''
     return
   }
-  await app.renameSelf(name)
-  toast.success(t('common.renameSuccess'))
+  const result = validateName(trimmed)
+  if (!result.valid) {
+    if (result.error === 'empty') {
+      toast.error(t('settings.nameErrorEmpty'))
+    } else if (result.error === 'tooLong') {
+      toast.error(t('settings.nameErrorTooLong', { max: 32 }))
+    }
+    renameText.value = app.identity?.name ?? ''
+    return
+  }
+  try {
+    await app.renameSelf(trimmed)
+    toast.success(t('common.renameSuccess'))
+  } catch (e) {
+    toast.error(t('settings.nameErrorBackend', { error: String(e) }))
+    renameText.value = app.identity?.name ?? ''
+  }
+}
+
+async function onRenameBlur(): Promise<void> {
+  await applyRename(renameText.value)
 }
 
 function onRandomName(): void {
-  renameText.value = generateRandomName()
+  const name = generateRandomName()
+  renameText.value = name
+  void applyRename(name)
 }
 
 function onLocaleChange(loc: Locale): void {

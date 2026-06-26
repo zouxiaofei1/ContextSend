@@ -316,7 +316,10 @@ async function onExport(): Promise<void> {
   font-size: 0.75rem;
   margin-left: auto;
   white-space: nowrap;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+  flex-shrink: 1;
 }
 
 .dot-new {

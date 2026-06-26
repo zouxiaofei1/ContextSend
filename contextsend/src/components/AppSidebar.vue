@@ -197,6 +197,7 @@ function onNavKeydown(e: KeyboardEvent) {
 .sidebar__text {
   overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   transition:
     opacity 0.1s ease,
     max-width 0.12s ease;
@@ -241,6 +242,7 @@ function onNavKeydown(e: KeyboardEvent) {
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--border);
   font-size: 0.8rem;
+  min-width: 0;
   transition:
     gap 0.12s ease,
     padding 0.12s ease;

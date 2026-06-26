@@ -9,5 +9,8 @@ export const ALL_TABS = [TAB_DEVICES, TAB_RECEIVE, TAB_SETTINGS] as const
 export const ADAPTER_JAN = 'Jan' as const
 export const ADAPTER_CHATBOX = 'ChatBox' as const
 
+/** 设备名最大字符数（Unicode 码点，非字节） */
+export const NAME_MAX_LENGTH = 32
+
 /** 外部链接 */
 export const GITHUB_URL = 'https://github.com/zouxiaofei1/ContextSend'

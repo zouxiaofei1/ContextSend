@@ -7,6 +7,7 @@ use cs_core::Conversation;
 use tokio::io::{split, AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 
 use crate::crypto::{KeyExchange, SessionCipher};
+use crate::identity::{self, NAME_MAX_LEN};
 use crate::wire::{self, AppMessage, Hello};
 use crate::NetworkError;
 
@@ -75,7 +76,7 @@ where
         cipher: keys.cipher(),
         peer: PeerInfo {
             uuid: peer_hello.uuid,
-            name: peer_hello.name,
+            name: identity::truncate_name(&peer_hello.name, NAME_MAX_LEN),
         },
         pin: keys.pin().to_string(),
     })

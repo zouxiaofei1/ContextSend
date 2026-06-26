@@ -104,7 +104,8 @@ pub fn update_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         }
         for (id, name) in &online_devices {
             let item_id = format!("tray_dev_{}", id);
-            if let Ok(item) = MenuItem::with_id(app, item_id, name.as_str(), false, None::<&str>) {
+            let display = truncate_name(name, 32);
+            if let Ok(item) = MenuItem::with_id(app, item_id, &display, false, None::<&str>) {
                 items.push(Box::new(item));
             }
         }
@@ -143,5 +144,14 @@ fn show_and_focus<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// 按 Unicode 字符数截断名称，超出 max_len 则追加 "…"。
+fn truncate_name(name: &str, max_len: usize) -> String {
+    if name.chars().count() > max_len {
+        name.chars().take(max_len).collect::<String>() + "\u{2026}"
+    } else {
+        name.to_string()
     }
 }

@@ -10,6 +10,18 @@ use uuid::Uuid;
 
 use crate::{naming, NetworkError};
 
+/// 设备名最大字符数（Unicode 标量值，非字节）。
+pub const NAME_MAX_LEN: usize = 32;
+
+/// 按 Unicode 字符数截断名称，超出 max_len 则追加 "…"。
+pub fn truncate_name(name: &str, max_len: usize) -> String {
+    if name.chars().count() > max_len {
+        name.chars().take(max_len).collect::<String>() + "\u{2026}"
+    } else {
+        name.to_string()
+    }
+}
+
 /// 本机设备身份。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceIdentity {
@@ -53,8 +65,20 @@ impl DeviceIdentity {
     }
 
     /// 改名并写回磁盘。
+    /// 校验：非空、不超过 [`NAME_MAX_LEN`] 个字符。
     pub fn rename(&mut self, new_name: impl Into<String>, path: &Path) -> Result<(), NetworkError> {
-        self.name = new_name.into();
+        let name: String = new_name.into();
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(NetworkError::InvalidName("名称不能为空".into()));
+        }
+        if trimmed.chars().count() > NAME_MAX_LEN {
+            return Err(NetworkError::InvalidName(format!(
+                "名称不能超过 {} 个字符",
+                NAME_MAX_LEN
+            )));
+        }
+        self.name = trimmed.to_string();
         self.save(path)
     }
 }
@@ -85,6 +109,43 @@ mod tests {
 
         let reloaded = DeviceIdentity::load_or_create(&path).unwrap();
         assert_eq!(reloaded.name, "我的笔记本");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn rename_rejects_empty() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("cs-identity-empty-{}.json", Uuid::new_v4()));
+
+        let mut id = DeviceIdentity::load_or_create(&path).unwrap();
+        let result = id.rename("   ", &path);
+        assert!(result.is_err(), "纯空格名应被拒绝");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn rename_rejects_too_long() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("cs-identity-long-{}.json", Uuid::new_v4()));
+
+        let mut id = DeviceIdentity::load_or_create(&path).unwrap();
+        let long_name = "测".repeat(33); // 33 个汉字 > 32
+        let result = id.rename(long_name, &path);
+        assert!(result.is_err(), "超过 32 字符名应被拒绝");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn rename_allows_valid_name() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("cs-identity-valid-{}.json", Uuid::new_v4()));
+
+        let mut id = DeviceIdentity::load_or_create(&path).unwrap();
+        id.rename("My 笔记本", &path).unwrap();
+        assert_eq!(id.name, "My 笔记本");
 
         let _ = std::fs::remove_file(&path);
     }

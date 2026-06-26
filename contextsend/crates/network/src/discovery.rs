@@ -9,6 +9,7 @@ use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use crate::identity::DeviceIdentity;
+use crate::identity::{self, NAME_MAX_LEN};
 use crate::NetworkError;
 
 /// ContextSend 的 mDNS 服务类型。
@@ -83,7 +84,7 @@ impl Discovery {
                         }
                         let name = info
                             .get_property_val_str("name")
-                            .map(str::to_string)
+                            .map(|s| identity::truncate_name(s, NAME_MAX_LEN))
                             .unwrap_or_else(|| uuid.clone());
                         let port = info.get_port();
                         let addrs: Vec<SocketAddr> = info

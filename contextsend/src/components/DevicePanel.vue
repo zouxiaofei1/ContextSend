@@ -239,6 +239,7 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
+  min-width: 0;
 }
 
 .device-item:last-child {
@@ -248,6 +249,10 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
 .device-name {
   color: var(--text-primary);
   font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* 弹性空隙：占满中间，把推送 / 更多推到右侧 */
