@@ -17,12 +17,17 @@ import {
   DEFAULT_START_MINIMIZED,
   DEFAULT_CUSTOM_PORT,
   DEFAULT_CONNECTION_TIMEOUT,
+  DEFAULT_CONVERSATION_RETENTION,
+  DEFAULT_MAX_CONVERSATION_COUNT,
   PORT_MIN,
   PORT_MAX,
   TIMEOUT_MIN,
   TIMEOUT_MAX,
+  MAX_CONVERSATION_COUNT_MIN,
+  MAX_CONVERSATION_COUNT_MAX,
   IPC,
 } from '../constants'
+import type { RetentionValue } from '../constants'
 
 
 interface SettingsData {
@@ -36,6 +41,8 @@ interface SettingsData {
   startMinimized: boolean
   customPort: number
   connectionTimeout: number
+  conversationRetention: RetentionValue
+  maxConversationCount: number
 }
 
 function loadSettings(): SettingsData {
@@ -57,6 +64,13 @@ function loadSettings(): SettingsData {
           typeof parsed.connectionTimeout === 'number'
             ? parsed.connectionTimeout
             : DEFAULT_CONNECTION_TIMEOUT,
+        conversationRetention: isRetentionValue(parsed.conversationRetention)
+          ? parsed.conversationRetention
+          : DEFAULT_CONVERSATION_RETENTION,
+        maxConversationCount:
+          typeof parsed.maxConversationCount === 'number'
+            ? parsed.maxConversationCount
+            : DEFAULT_MAX_CONVERSATION_COUNT,
       }
     }
   } catch {
@@ -73,7 +87,13 @@ function loadSettings(): SettingsData {
     startMinimized: DEFAULT_START_MINIMIZED,
     customPort: DEFAULT_CUSTOM_PORT,
     connectionTimeout: DEFAULT_CONNECTION_TIMEOUT,
+    conversationRetention: DEFAULT_CONVERSATION_RETENTION,
+    maxConversationCount: DEFAULT_MAX_CONVERSATION_COUNT,
   }
+}
+
+function isRetentionValue(v: unknown): v is RetentionValue {
+  return v === '6h' || v === '1d' || v === '7d' || v === '30d' || v === 'unlimited'
 }
 
 function persist(data: SettingsData): void {
@@ -93,6 +113,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const startMinimized = ref<boolean>(initial.startMinimized)
   const customPort = ref<number>(initial.customPort)
   const connectionTimeout = ref<number>(initial.connectionTimeout)
+  const conversationRetention = ref<RetentionValue>(initial.conversationRetention)
+  const maxConversationCount = ref<number>(initial.maxConversationCount)
 
   /** 将 CSS 变量和 data-theme 应用至 DOM。 */
   function applyTheme(): void {
@@ -181,6 +203,21 @@ export const useSettingsStore = defineStore('settings', () => {
     invoke(IPC.SET_CONNECTION_TIMEOUT, { timeoutSecs: connectionTimeout.value }).catch(() => {})
   }
 
+  function setConversationRetention(value: RetentionValue): void {
+    conversationRetention.value = value
+  }
+
+  function setMaxConversationCount(value: number): void {
+    const n = Number.isFinite(value) ? Math.round(value) : DEFAULT_MAX_CONVERSATION_COUNT
+    if (n < MAX_CONVERSATION_COUNT_MIN) {
+      maxConversationCount.value = MAX_CONVERSATION_COUNT_MIN
+    } else if (n > MAX_CONVERSATION_COUNT_MAX) {
+      maxConversationCount.value = MAX_CONVERSATION_COUNT_MAX
+    } else {
+      maxConversationCount.value = n
+    }
+  }
+
   /** 持久化所有设置到 localStorage，并同步 DOM 主题 + 后端。 */
   watch(
     [
@@ -194,8 +231,10 @@ export const useSettingsStore = defineStore('settings', () => {
       startMinimized,
       customPort,
       connectionTimeout,
+      conversationRetention,
+      maxConversationCount,
     ],
-    ([t, a, l, m, s, adv, atop, sm, port, timeout]) => {
+    ([t, a, l, m, s, adv, atop, sm, port, timeout, retention, maxCount]) => {
       persist({
         theme: t,
         accentColor: a,
@@ -207,6 +246,8 @@ export const useSettingsStore = defineStore('settings', () => {
         startMinimized: sm,
         customPort: port,
         connectionTimeout: timeout,
+        conversationRetention: retention,
+        maxConversationCount: maxCount,
       })
       applyTheme()
     },
@@ -229,6 +270,8 @@ export const useSettingsStore = defineStore('settings', () => {
     startMinimized,
     customPort,
     connectionTimeout,
+    conversationRetention,
+    maxConversationCount,
     applyTheme,
     toggleTheme,
     setAccentColor,
@@ -240,6 +283,8 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleStartMinimized,
     setCustomPort,
     setConnectionTimeout,
+    setConversationRetention,
+    setMaxConversationCount,
     syncBackend,
   }
 })

@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { load, type Store } from '@tauri-apps/plugin-store'
-import { IPC, EVENT, STORE_FILE, STORE_KEY, ADAPTER_CHATBOX } from '../constants'
+import { IPC, EVENT, STORE_FILE, STORE_KEY, ADAPTER_CHATBOX, retentionToMs } from '../constants'
 import { useToastStore } from './toast'
+import { useSettingsStore } from './settings'
 
 /** 与 Rust 端 `commands::AppInfo` 对应的应用信息。 */
 export interface AppInfo {
@@ -190,6 +191,17 @@ export const useAppStore = defineStore('app', () => {
     void persistPermissions()
   }
 
+  /** 监听高级设置中的清理策略变更，实时生效。 */
+  watch(
+    () => {
+      const s = useSettingsStore()
+      return [s.conversationRetention, s.maxConversationCount] as const
+    },
+    () => {
+      enforceCleanup()
+    },
+  )
+
   /** 初始化：拉取应用信息、身份、设备列表，并订阅后端事件。 */
   async function init(): Promise<void> {
     loading.value = true
@@ -197,6 +209,7 @@ export const useAppStore = defineStore('app', () => {
       // 先订阅事件，避免错过网络就绪后立即发现的设备；三个独立查询并行拉取。
       await subscribe()
       await loadSegments()
+      enforceCleanup()
       await loadPermissions()
       const [appInfo, self, devs] = await Promise.all([
         invoke<AppInfo>(IPC.GET_APP_INFO),
@@ -404,6 +417,37 @@ export const useAppStore = defineStore('app', () => {
 
   // ---- 段管理 ----
 
+  /** 根据保存期限清理过期对话（静默，不提示）。 */
+  function enforceRetentionPolicy(): void {
+    const settings = useSettingsStore()
+    const maxMs = retentionToMs(settings.conversationRetention)
+    if (maxMs === null) return
+    const cutoff = Date.now() - maxMs
+    const before = segments.value.length
+    segments.value = segments.value.filter((s) => s.receivedAt >= cutoff)
+    if (segments.value.length !== before) {
+      void persistSegments()
+    }
+  }
+
+  /** 根据最大条数限制对话数量（保留最新），-1/0 表示不限。 */
+  function enforceMaxCount(): void {
+    const settings = useSettingsStore()
+    const max = settings.maxConversationCount
+    if (max <= 0) return
+    if (segments.value.length > max) {
+      segments.value.sort((a, b) => b.receivedAt - a.receivedAt)
+      segments.value = segments.value.slice(0, max)
+      void persistSegments()
+    }
+  }
+
+  /** 同时执行两项清理策略。 */
+  function enforceCleanup(): void {
+    enforceRetentionPolicy()
+    enforceMaxCount()
+  }
+
   /** 新增一段对话（最新在前），并落盘。返回新段 id。 */
   function addSegment(fromName: string, conversation: Conversation, read: boolean): string {
     const seg: ConversationSegment = {
@@ -416,6 +460,7 @@ export const useAppStore = defineStore('app', () => {
     segments.value.unshift(seg)
     if (!selectedSegmentId.value) selectedSegmentId.value = seg.id
     void persistSegments()
+    enforceCleanup()
     return seg.id
   }
 

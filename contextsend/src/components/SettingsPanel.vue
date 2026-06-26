@@ -3,7 +3,8 @@ import { ref, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useToastStore } from '../stores/toast'
 import { useSettingsStore } from '../stores/settings'
-import { ACCENT_COLORS, GITHUB_URL, PORT_MIN, PORT_MAX, TIMEOUT_MIN, TIMEOUT_MAX } from '../constants'
+import { ACCENT_COLORS, GITHUB_URL, PORT_MIN, PORT_MAX, TIMEOUT_MIN, TIMEOUT_MAX, RETENTION_OPTIONS } from '../constants'
+import type { RetentionValue } from '../constants'
 import { SUPPORTED_LOCALES } from '../i18n'
 import type { Locale } from '../i18n'
 import { useI18n } from 'vue-i18n'
@@ -279,6 +280,48 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
           </label>
         </div>
       </div>
+
+      <!-- 对话保存期限 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.retention') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <select
+            class="retention-select"
+            :value="settings.conversationRetention"
+            @change="settings.setConversationRetention(($event.target as HTMLSelectElement).value as RetentionValue)"
+          >
+            <option
+              v-for="opt in RETENTION_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ t(opt.labelKey) }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 最大缓存对话条数 -->
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>{{ t('settings.advanced.maxConversationCount') }}</span>
+        </div>
+        <div class="setting-row__control">
+          <input
+            type="number"
+            class="number-input"
+            :value="settings.maxConversationCount === -1 ? '' : settings.maxConversationCount"
+            :placeholder="t('settings.advanced.maxConversationCountPlaceholder')"
+            :min="-1"
+            :max="9999"
+            @change="
+              settings.setMaxConversationCount(Number(($event.target as HTMLInputElement).value))
+            "
+          />
+        </div>
+      </div>
     </section>
 
     <!-- 关于 -->
@@ -360,6 +403,11 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
 .accent-color-select {
   width: auto;
   min-width: 160px;
+}
+
+.retention-select {
+  width: auto;
+  min-width: 120px;
 }
 
 .rename-control {

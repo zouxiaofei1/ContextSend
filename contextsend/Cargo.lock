@@ -508,7 +508,7 @@ dependencies = [
 
 [[package]]
 name = "contextsend"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "cs-adapters",
  "cs-core",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "cs-adapters"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "cs-core",
  "dirs 5.0.1",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "cs-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "cs-network"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aes-gcm",
  "cs-core",

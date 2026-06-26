@@ -106,6 +106,16 @@ export default {
       seconds: '秒',
       alwaysOnTop: '窗口置顶',
       startMinimized: '启动时最小化到托盘',
+      retention: '对话保存期限',
+      retentionOptions: {
+        '6h': '6 小时',
+        '1d': '1 天',
+        '7d': '7 天',
+        '30d': '30 天',
+        unlimited: '无限期',
+      },
+      maxConversationCount: '最大缓存对话条数',
+      maxConversationCountPlaceholder: '默认不限',
     },
   },
   common: {

@@ -107,6 +107,16 @@ export default {
       seconds: 's',
       alwaysOnTop: 'Always on top',
       startMinimized: 'Start minimized to tray',
+      retention: 'Conversation Retention',
+      retentionOptions: {
+        '6h': '6 Hours',
+        '1d': '1 Day',
+        '7d': '7 Days',
+        '30d': '30 Days',
+        unlimited: 'Unlimited',
+      },
+      maxConversationCount: 'Max Cached Conversations',
+      maxConversationCountPlaceholder: 'Unlimited by default',
     },
   },
   common: {

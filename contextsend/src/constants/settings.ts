@@ -22,3 +22,38 @@ export const PORT_MAX = 65535
 /** 连接超时合法范围（秒） */
 export const TIMEOUT_MIN = 1
 export const TIMEOUT_MAX = 300
+
+// ---- 对话保存期限 ----
+
+export const RETENTION_OPTIONS = [
+  { value: '6h', labelKey: 'settings.advanced.retentionOptions.6h' },
+  { value: '1d', labelKey: 'settings.advanced.retentionOptions.1d' },
+  { value: '7d', labelKey: 'settings.advanced.retentionOptions.7d' },
+  { value: '30d', labelKey: 'settings.advanced.retentionOptions.30d' },
+  { value: 'unlimited', labelKey: 'settings.advanced.retentionOptions.unlimited' },
+] as const
+
+export type RetentionValue = (typeof RETENTION_OPTIONS)[number]['value']
+
+export const DEFAULT_CONVERSATION_RETENTION: RetentionValue = 'unlimited'
+export const DEFAULT_MAX_CONVERSATION_COUNT = -1
+
+/** 最大缓存对话条数合法范围（-1 表示不限） */
+export const MAX_CONVERSATION_COUNT_MIN = -1
+export const MAX_CONVERSATION_COUNT_MAX = 9999
+
+/** 将保存期限值转换为毫秒；'unlimited' 返回 null。 */
+export function retentionToMs(value: RetentionValue): number | null {
+  switch (value) {
+    case '6h':
+      return 6 * 60 * 60 * 1000
+    case '1d':
+      return 24 * 60 * 60 * 1000
+    case '7d':
+      return 7 * 24 * 60 * 60 * 1000
+    case '30d':
+      return 30 * 24 * 60 * 60 * 1000
+    default:
+      return null
+  }
+}
