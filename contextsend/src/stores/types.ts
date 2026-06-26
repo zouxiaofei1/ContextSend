@@ -18,11 +18,17 @@ export interface SelfIdentity {
   name: string
 }
 
-/** 设备列表项，对应 Rust `Device`。 */
+/** 设备列表项，对应 Rust `Device`（外加前端持久化的 `lastSync`）。 */
 export interface Device {
   id: string
   name: string
   online: boolean
+  /** 操作系统标识（windows / linux / macos…），用于展示平台图标。后端发现事件携带。 */
+  os?: string
+  /** 用于展示的首选 IP 地址。后端发现事件携带。 */
+  ip?: string
+  /** 上次与该设备成功同步（推送/接收）的时间戳（毫秒）。纯前端持久化，不来自后端。 */
+  lastSync?: number
 }
 
 /**
@@ -85,7 +91,7 @@ export interface OutgoingPairing {
 
 /** 后端 `net-event` 事件（与 Rust `NetEvent` 的 serde 标签对应）。 */
 export type NetEvent =
-  | { type: 'deviceFound'; id: string; name: string; online: boolean }
+  | { type: 'deviceFound'; id: string; name: string; online: boolean; os: string; ip: string }
   | { type: 'deviceLost'; uuid: string }
   | { type: 'incomingPairing'; pairingId: number; peerUuid: string; peerName: string; pin: string }
   | {

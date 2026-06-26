@@ -32,12 +32,14 @@ export const EVENT = {
 export const STORE_FILE = {
   SEGMENTS: 'segments.json',
   PERMISSIONS: 'permissions.json',
+  DEVICES: 'devices.json',
 } as const
 
 /** Tauri plugin-store 数据键 */
 export const STORE_KEY = {
   SEGMENTS: 'segments',
   PERMISSIONS: 'permissions',
+  DEVICES: 'devices',
 } as const
 
 /** 浏览器 localStorage 键 */

@@ -36,6 +36,10 @@ pub struct Device {
     pub name: String,
     /// 是否在线（mDNS 在线即 true）。
     pub online: bool,
+    /// 对端操作系统标识（windows / linux / macos…），供 UI 展示平台图标。
+    pub os: String,
+    /// 用于展示的首选 IP 地址（无可用地址时为空串）。
+    pub ip: String,
 }
 
 /// 网络层统一错误类型。
@@ -65,6 +69,8 @@ mod tests {
             id: "uuid-1".into(),
             name: "晨雾微风".into(),
             online: true,
+            os: "windows".into(),
+            ip: "192.168.1.2".into(),
         };
         let json = serde_json::to_string(&d).unwrap();
         assert!(json.contains("晨雾微风"));

@@ -8,6 +8,7 @@
 //! 配对码采用 SAS：双方各自从同一 ECDH 共享密钥派生出同一个 6 位码，用户两端比对一致即可。
 
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -118,6 +119,8 @@ impl NetworkService {
                     match event {
                         DiscoveryEvent::Found(dev) => {
                             log::debug!("发现设备: name={} uuid={}", dev.name, dev.uuid);
+                            let ip = primary_ip(&dev.addrs);
+                            let os = dev.os.clone();
                             inner
                                 .devices
                                 .lock()
@@ -127,6 +130,8 @@ impl NetworkService {
                                 id: dev.uuid,
                                 name: dev.name,
                                 online: true,
+                                os,
+                                ip,
                             }));
                         }
                         DiscoveryEvent::Lost { uuid } => {
@@ -218,6 +223,8 @@ impl NetworkService {
                 id: d.uuid.clone(),
                 name: d.name.clone(),
                 online: true,
+                os: d.os.clone(),
+                ip: primary_ip(&d.addrs),
             })
             .collect()
     }
@@ -330,4 +337,17 @@ impl NetworkService {
             .remove(&pairing_id)
             .ok_or_else(|| NetworkError::Protocol("配对会话不存在或已过期".into()))
     }
+}
+
+/// 从对端广播的候选地址中挑一个用于 UI 展示的首选 IP：
+/// 优先非回环的 IPv4（最贴近用户认知的局域网地址），否则退回第一个地址；
+/// 无地址时返回空串。
+fn primary_ip(addrs: &[SocketAddr]) -> String {
+    addrs
+        .iter()
+        .find(|a| a.is_ipv4() && !a.ip().is_loopback())
+        .or_else(|| addrs.iter().find(|a| !a.ip().is_loopback()))
+        .or_else(|| addrs.first())
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default()
 }

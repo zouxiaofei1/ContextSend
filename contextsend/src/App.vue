@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useAppStore } from './stores/app'
 import { useSettingsStore } from './stores/settings'
@@ -16,6 +16,10 @@ import SettingsPanel from './components/SettingsPanel.vue'
 
 const app = useAppStore()
 const { isPortrait, isCompact } = useLayout()
+
+// 用户手动收起侧边栏（双击切换）；与窗口过窄触发的自动紧凑叠加生效
+const manualCollapsed = ref(false)
+const sidebarCompact = computed(() => isCompact.value || manualCollapsed.value)
 
 // 全局：在窗口任意位置粘贴 / 拖入文本即匹配回本地会话并入库。
 useContextCapture()
@@ -48,6 +52,10 @@ onMounted(() => {
 function onSelectTab(tab: string): void {
   activeTab.value = tab
 }
+
+function onToggleSidebar(): void {
+  manualCollapsed.value = !manualCollapsed.value
+}
 </script>
 
 <template>
@@ -57,7 +65,12 @@ function onSelectTab(tab: string): void {
 
     <!-- 横屏布局：左侧边栏 + 右侧内容 -->
     <div v-if="!isPortrait" class="app-layout">
-      <AppSidebar :active-tab="activeTab" :compact="isCompact" @select="onSelectTab" />
+      <AppSidebar
+        :active-tab="activeTab"
+        :compact="sidebarCompact"
+        @select="onSelectTab"
+        @toggle="onToggleSidebar"
+      />
       <main class="app-main">
         <component :is="panelMap[activeTab]" />
       </main>

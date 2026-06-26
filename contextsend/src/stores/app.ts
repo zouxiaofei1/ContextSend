@@ -11,7 +11,7 @@ import { useSegments } from './modules/useSegments'
 import { useDevices } from './modules/useDevices'
 import { usePairing } from './modules/usePairing'
 import { useAdapters } from './modules/useAdapters'
-import type { AppInfo, Device, NetEvent, SelfIdentity } from './types'
+import type { AppInfo, NetEvent, SelfIdentity } from './types'
 
 // 领域类型重新导出，组件仍可从 `stores/app` 导入（如 ConversationSegment）。
 export type * from './types'
@@ -36,6 +36,7 @@ export const useAppStore = defineStore('app', () => {
   const pairing = usePairing({
     permissionOf: permissions.permissionOf,
     setPermission: permissions.setPermission,
+    recordSync: devices.recordSync,
   })
   const adapters = useAdapters()
 
@@ -59,14 +60,15 @@ export const useAppStore = defineStore('app', () => {
       await segments.loadSegments()
       segments.enforceCleanup()
       await permissions.loadPermissions()
-      const [appInfo, self, devs] = await Promise.all([
+      // 恢复跨重启记住的设备（先一律离线），再用权威快照标记在线/离线。
+      await devices.loadDevices()
+      const [appInfo, self] = await Promise.all([
         invoke<AppInfo>(IPC.GET_APP_INFO),
         invoke<SelfIdentity>(IPC.GET_SELF_IDENTITY),
-        invoke<Device[]>(IPC.LIST_DEVICES),
       ])
       info.value = appInfo
       identity.value = self
-      devices.devices.value = devs
+      await devices.refreshDevices()
     } catch (e) {
       toast.error(String(e))
     } finally {
@@ -84,15 +86,22 @@ export const useAppStore = defineStore('app', () => {
       const p = event.payload
       switch (p.type) {
         case 'deviceFound':
-          devices.upsertDevice({ id: p.id, name: p.name, online: p.online })
+          devices.upsertDevice({
+            id: p.id,
+            name: p.name,
+            online: p.online,
+            os: p.os,
+            ip: p.ip,
+          })
           break
         case 'deviceLost':
-          devices.removeDevice(p.uuid)
+          devices.markOffline(p.uuid)
           break
         case 'incomingPairing':
           pairing.handleIncomingPairing(p, permissions.permissionOf(p.peerUuid))
           break
         case 'conversationReceived':
+          devices.recordSync(p.fromUuid, Date.now())
           segments.addSegment(p.fromName, p.conversation, false)
           toast.info(
             t('receive.received', { name: p.fromName, count: p.conversation.messages.length }),
@@ -124,6 +133,7 @@ export const useAppStore = defineStore('app', () => {
     setPermission: permissions.setPermission,
     // 设备
     devices: devices.devices,
+    forgetDevice: devices.forgetDevice,
     // 配对
     incoming: pairing.incoming,
     outgoing: pairing.outgoing,

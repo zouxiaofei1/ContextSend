@@ -20,6 +20,8 @@ interface IncomingPairingPayload {
 export function usePairing(deps: {
   permissionOf: (id: string) => PermissionLevel
   setPermission: (id: string, level: PermissionLevel) => void
+  /** 推送成功后记录与该设备的同步时间（毫秒）。 */
+  recordSync: (id: string, ts: number) => void
 }) {
   const toast = useToastStore()
   const incoming = ref<IncomingPairing | null>(null)
@@ -72,6 +74,7 @@ export function usePairing(deps: {
       // 已信任设备的普通推送：无需确认，直接推送（不弹窗、不展示 PIN）。
       if (!upgrade && deps.permissionOf(targetUuid) === 1) {
         await invoke(IPC.PUSH_CONVERSATION, { pairingId: res.pairingId, conversation })
+        deps.recordSync(targetUuid, Date.now())
         toast.success(t('device.pushedSuccess'))
         return
       }
@@ -95,6 +98,7 @@ export function usePairing(deps: {
     const { pairingId, targetUuid, upgrade, conversation } = outgoing.value
     try {
       await invoke(IPC.PUSH_CONVERSATION, { pairingId, conversation })
+      deps.recordSync(targetUuid, Date.now())
       if (upgrade) deps.setPermission(targetUuid, 2)
       toast.success(t('device.pushedSuccess'))
     } catch (e) {

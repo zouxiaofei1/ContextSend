@@ -15,6 +15,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [tab: string]
+  toggle: []
 }>()
 
 const app = useAppStore()
@@ -50,7 +51,11 @@ function onNavKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ 'sidebar--compact': compact }">
+  <aside
+    class="sidebar"
+    :class="{ 'sidebar--compact': compact }"
+    @dblclick="emit('toggle')"
+  >
     <!-- Logo 区 -->
     <div class="sidebar__logo">
       <img class="sidebar__logo-icon" :src="appIcon" alt="" />
@@ -74,6 +79,7 @@ function onNavKeydown(e: KeyboardEvent) {
         class="sidebar__nav-item"
         :class="{ 'sidebar__nav-item--active': activeTab === item.id }"
         @click="emit('select', item.id)"
+        @dblclick.stop
         @focus="onNavFocus(index)"
       >
         <span class="sidebar__nav-icon" v-html="item.icon"></span>
@@ -87,8 +93,13 @@ function onNavKeydown(e: KeyboardEvent) {
 
     <!-- 底部本机信息 -->
     <div class="sidebar__footer" v-if="app.identity">
-      <span class="dot online" />
-      <span class="sidebar__text muted" :class="{ 'sidebar__text--hidden': compact }">{{
+      <span class="sidebar__me-badge">
+        <span class="dot online" />
+        <span class="sidebar__me-label sidebar__text" :class="{ 'sidebar__text--hidden': compact }">{{
+          t('common.myDevice')
+        }}</span>
+      </span>
+      <span class="sidebar__me-name sidebar__text" :class="{ 'sidebar__text--hidden': compact }">{{
         app.identity.name
       }}</span>
     </div>
@@ -235,6 +246,13 @@ function onNavKeydown(e: KeyboardEvent) {
   padding: 0.75rem 0.25rem;
 }
 
+.sidebar--compact .sidebar__me-badge {
+  padding: 0;
+  gap: 0;
+  border: none;
+  background: transparent;
+}
+
 .sidebar__footer {
   display: flex;
   align-items: center;
@@ -246,5 +264,30 @@ function onNavKeydown(e: KeyboardEvent) {
   transition:
     gap 0.12s ease,
     padding 0.12s ease;
+}
+
+.sidebar__me-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+  transition:
+    gap 0.12s ease,
+    padding 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.sidebar__me-label {
+  color: var(--text-secondary);
+}
+
+.sidebar__me-name {
+  color: var(--text-secondary);
+  min-width: 0;
 }
 </style>

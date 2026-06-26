@@ -34,6 +34,8 @@ pub const REANNOUNCE_INTERVAL: Duration = Duration::from_secs(30);
 pub struct DiscoveredDevice {
     pub uuid: String,
     pub name: String,
+    /// 对端操作系统标识（`std::env::consts::OS`：windows / linux / macos…），用于 UI 展示平台图标。
+    pub os: String,
     /// 对端广播的所有候选地址（多网卡时含虚拟网卡），连接时逐个尝试。
     pub addrs: Vec<SocketAddr>,
 }
@@ -67,7 +69,8 @@ fn build_service_info(
     port: u16,
 ) -> Result<ServiceInfo, NetworkError> {
     let host = format!("{uuid}.local.");
-    let props = [("uuid", uuid), ("name", name)];
+    // 额外广播本机操作系统，供对端 UI 展示平台（win/linux/mac）图标。
+    let props = [("uuid", uuid), ("name", name), ("os", std::env::consts::OS)];
     ServiceInfo::new(SERVICE_TYPE, uuid, &host, "", port, &props[..])
         .map(|info| info.enable_addr_auto())
         .map_err(|e| NetworkError::Mdns(e.to_string()))
@@ -114,6 +117,10 @@ impl Discovery {
                             .get_property_val_str("name")
                             .map(|s| identity::truncate_name(s, NAME_MAX_LEN))
                             .unwrap_or_else(|| uuid.clone());
+                        let os = info
+                            .get_property_val_str("os")
+                            .map(str::to_string)
+                            .unwrap_or_default();
                         let port = info.get_port();
                         let addrs: Vec<SocketAddr> = info
                             .get_addresses()
@@ -121,7 +128,12 @@ impl Discovery {
                             .map(|ip| SocketAddr::new(*ip, port))
                             .collect();
                         if !addrs.is_empty() {
-                            let device = DiscoveredDevice { uuid, name, addrs };
+                            let device = DiscoveredDevice {
+                                uuid,
+                                name,
+                                os,
+                                addrs,
+                            };
                             if tx.send(DiscoveryEvent::Found(device)).is_err() {
                                 break; // 上层已关闭。
                             }

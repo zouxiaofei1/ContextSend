@@ -5,7 +5,7 @@ import type { Conversation, Device, PermissionLevel } from '../stores/app'
 import { useI18n } from 'vue-i18n'
 
 const app = useAppStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 /** 推送源：接收页选定的段，回退到最新段，再回退到示例对话。 */
 const pushConversation = computed<Conversation>(() => {
@@ -22,8 +22,58 @@ const pushConversation = computed<Conversation>(() => {
   }
 })
 
-const onlineDevices = computed(() => app.devices.filter((d) => d.online))
-const offlineDevices = computed(() => app.devices.filter((d) => !d.online))
+/**
+ * 设备排序：在线优先，离线沉底；同组内本机优先，再按名称稳定排序。
+ * 离线设备不再消失，而是默认排在列表最下面。
+ */
+const sortedDevices = computed(() => {
+  const selfId = app.identity?.uuid
+  return [...app.devices].sort((a, b) => {
+    if (a.online !== b.online) return a.online ? -1 : 1
+    if (a.id === selfId) return -1
+    if (b.id === selfId) return 1
+    return a.name.localeCompare(b.name)
+  })
+})
+
+const onlineCount = computed(() => app.devices.filter((d) => d.online).length)
+
+/** 平台图标：按 os 标识映射到一个 emoji 字形（未知则用通用机器图标）。 */
+function platformIcon(os?: string): string {
+  switch (os) {
+    case 'windows':
+      return '🪟'
+    case 'macos':
+      return '🍎'
+    case 'linux':
+      return '🐧'
+    default:
+      return '💻'
+  }
+}
+
+/**
+ * 上次同步时间拆成 日期 / 时间 两段，并标记是否今天，供响应式按需隐藏。
+ * 无记录返回 null（展示「从未同步」）。
+ */
+function syncParts(ts?: number): { date: string; time: string; isToday: boolean } | null {
+  if (!ts) return null
+  const loc = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
+  const d = new Date(ts)
+  const now = new Date()
+  const isToday =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  const date = d.toLocaleDateString(loc, { month: 'short', day: 'numeric' })
+  const time = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' })
+  return { date, time, isToday }
+}
+
+/** 设备行 = 排序后的设备 + 预算好的同步时间分段（避免模板里重复调用）。 */
+const deviceRows = computed(() =>
+  sortedDevices.value.map((d) => ({ device: d, sync: syncParts(d.lastSync) })),
+)
 
 /** 权限等级元数据：UI 标签 i18n key + 徽章样式类。Level 2 切换需走配对流程。 */
 const PERMISSION_LEVELS: { level: PermissionLevel; key: string; cls: string }[] = [
@@ -65,39 +115,93 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
     app.setPermission(d.id, level)
   }
 }
+
+/** 右键上下文菜单：目标设备 + 屏幕坐标（null 表示未打开）。 */
+const ctxMenu = ref<{ device: Device; x: number; y: number } | null>(null)
+
+/** 在设备卡片上右键：本机不弹菜单；其余设备打开上下文菜单于光标处。 */
+function openContextMenu(d: Device, e: MouseEvent): void {
+  if (d.id === app.identity?.uuid) return
+  openMenuId.value = null
+  ctxMenu.value = { device: d, x: e.clientX, y: e.clientY }
+}
+
+function closeContextMenu(): void {
+  ctxMenu.value = null
+}
+
+/** 上下文菜单「推送到设备」。 */
+function ctxPush(): void {
+  const d = ctxMenu.value?.device
+  closeContextMenu()
+  if (d) push(d)
+}
+
+/** 上下文菜单「忘记此设备」（仅离线时可见）。 */
+function ctxForget(): void {
+  const d = ctxMenu.value?.device
+  closeContextMenu()
+  if (d) app.forgetDevice(d.id)
+}
 </script>
 
 <template>
   <div class="panel">
-    <!-- 在线设备 -->
     <section class="card">
-      <h2>{{ t('device.online') }} ({{ onlineDevices.length }})</h2>
-      <ul v-if="onlineDevices.length" class="device-list">
-        <li v-for="d in onlineDevices" :key="d.id" class="device-item">
-          <span v-if="d.id === app.identity?.uuid" class="dot self" />
-          <span v-else class="dot" :class="levelMeta(app.permissionOf(d.id)).cls" />
-          <span class="device-name">{{ d.name }}</span>
-          <span class="muted" v-if="d.id === app.identity?.uuid">({{ t('device.me') }})</span>
+      <h2>{{ t('device.title') }} ({{ onlineCount }}/{{ app.devices.length }})</h2>
+      <ul v-if="app.devices.length" class="device-list">
+        <li
+          v-for="{ device: d, sync } in deviceRows"
+          :key="d.id"
+          class="device-card"
+          :class="{ offline: !d.online }"
+          @contextmenu.prevent="openContextMenu(d, $event)"
+        >
+          <!-- L1：左 平台图标 + 名称；右 权限点 + 在线/离线 -->
+          <div class="row row1">
+            <span class="platform" :title="d.os || ''">{{ platformIcon(d.os) }}</span>
+            <span class="device-name">{{ d.name }}</span>
+            <span class="muted me" v-if="d.id === app.identity?.uuid">({{ t('device.me') }})</span>
+            <span class="spacer" />
+            <span
+              v-if="d.id !== app.identity?.uuid"
+              class="dot"
+              :class="levelMeta(app.permissionOf(d.id)).cls"
+              :title="t(`device.permission.${levelMeta(app.permissionOf(d.id)).key}`)"
+            />
+            <span v-else class="dot self" />
+            <span class="status" :class="{ on: d.online }">
+              {{ d.online ? t('device.statusOnline') : t('device.statusOffline') }}
+            </span>
+          </div>
 
-          <!-- 弹性空隙：把操作推到右侧 -->
-          <span class="spacer" />
+          <!-- L2：左 IP；右 上次同步时间。窄屏按序隐藏：标签 →（今天隐日期 / 非今天隐时间） -->
+          <div class="row row2 muted">
+            <span class="ip">{{ d.ip || '—' }}</span>
+            <span class="spacer" />
+            <span v-if="sync" class="sync" :class="{ today: sync.isToday }">
+              <span class="sync-label">{{ t('device.lastSync') }}: </span>
+              <span class="sync-date">{{ sync.date }} </span>
+              <span class="sync-time">{{ sync.time }}</span>
+            </span>
+            <span v-else class="sync">{{ t('device.neverSynced') }}</span>
+          </div>
 
-          <template v-if="d.id !== app.identity?.uuid">
+          <!-- L3：右 推送 + 权限按钮（本机不显示操作） -->
+          <div v-if="d.id !== app.identity?.uuid" class="row row3">
+            <span class="spacer" />
             <button class="small" :disabled="app.permissionOf(d.id) === -1" @click="push(d)">
               {{ t('device.push') }}
             </button>
-
-            <!-- 「...」更多菜单 -->
             <div class="more">
               <button
                 class="ghost small more-btn"
-                :title="t('device.more')"
+                :title="t('device.setPermission')"
                 @click="toggleMenu(d.id)"
               >
                 ⋯
               </button>
               <template v-if="openMenuId === d.id">
-                <!-- 透明遮罩：点击外部关闭菜单 -->
                 <div class="menu-backdrop" @click="openMenuId = null" />
                 <div class="menu" role="menu">
                   <p class="menu-title">{{ t('device.setPermission') }}</p>
@@ -114,23 +218,33 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
                 </div>
               </template>
             </div>
-          </template>
+          </div>
         </li>
       </ul>
-      <p v-if="app.devices.length === 0" class="muted">{{ t('device.noDevices') }}</p>
+      <p v-else class="muted">{{ t('device.noDevices') }}</p>
     </section>
 
-    <!-- 离线设备 -->
-    <section v-if="offlineDevices.length" class="card">
-      <h2>{{ t('device.offline') }} ({{ offlineDevices.length }})</h2>
-      <ul class="device-list">
-        <li v-for="d in offlineDevices" :key="d.id" class="device-item">
-          <span class="dot" />
-          <span class="device-name">{{ d.name }}</span>
-          <span class="muted">— {{ t('device.neverConnected') }}</span>
-        </li>
-      </ul>
-    </section>
+    <!-- 设备右键上下文菜单：定位到光标处，点击外部关闭 -->
+    <Teleport to="body">
+      <div v-if="ctxMenu" class="menu-backdrop ctx-backdrop" @click="closeContextMenu" />
+      <div
+        v-if="ctxMenu"
+        class="menu ctx-menu"
+        role="menu"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      >
+        <button
+          class="menu-item"
+          :disabled="app.permissionOf(ctxMenu.device.id) === -1"
+          @click="ctxPush"
+        >
+          {{ t('device.pushToDevice') }}
+        </button>
+        <button v-if="!ctxMenu.device.online" class="menu-item danger" @click="ctxForget">
+          {{ t('device.forget') }}
+        </button>
+      </div>
+    </Teleport>
 
     <!-- 配对码 / 确认弹窗（居中 + 灰色遮罩）：主动配对与入站配对二选一 -->
     <Teleport to="body">
@@ -230,20 +344,49 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
   margin: 0;
   padding-left: 0;
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  /* 作为容器查询基准：卡片内文案按列表实际宽度（而非窗口宽度）逐级隐藏。 */
+  container: devlist / inline-size;
 }
 
-.device-item {
+/* ===== 三行设备卡片 ===== */
+.device-card {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--border);
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-primary);
   font-size: 0.9rem;
   min-width: 0;
 }
 
-.device-item:last-child {
-  border-bottom: none;
+.device-card.offline {
+  opacity: 0.6;
+}
+
+.device-card .row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.device-card .row2 {
+  font-size: 0.78rem;
+}
+
+.device-card .row3 {
+  margin-top: 0.15rem;
+}
+
+.platform {
+  font-size: 1.05rem;
+  line-height: 1;
+  flex: none;
 }
 
 .device-name {
@@ -255,12 +398,67 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
   min-width: 0;
 }
 
-/* 弹性空隙：占满中间，把推送 / 更多推到右侧 */
+.me {
+  flex: none;
+  font-size: 0.8rem;
+}
+
+.ip {
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sync {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 窄屏逐级隐藏：先去掉「上次同步」标签，再按今天/非今天去掉冗余的一段。 */
+@container devlist (max-width: 340px) {
+  .sync-label {
+    display: none;
+  }
+}
+
+@container devlist (max-width: 270px) {
+  /* 今天：日期冗余，只留时间 */
+  .sync.today .sync-date {
+    display: none;
+  }
+  /* 非今天：时间次要，只留日期 */
+  .sync:not(.today) .sync-time {
+    display: none;
+  }
+}
+
+/* 在线/离线文字标记 */
+.status {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.status.on {
+  color: var(--success);
+}
+
+/* 弹性空隙：占满中间，把右侧内容推到行尾 */
 .spacer {
   flex: 1;
 }
 
 /* ===== 圆点信任等级着色 ===== */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-secondary);
+}
+
 .dot.self {
   background: var(--success);
 }
@@ -341,6 +539,27 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
 .menu-item .check {
   color: var(--accent);
   font-weight: 700;
+}
+
+.menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.menu-item.danger {
+  color: var(--danger);
+}
+
+/* ===== 右键上下文菜单（teleport 到 body，定位到光标处） ===== */
+.ctx-backdrop {
+  z-index: 110;
+}
+
+.ctx-menu {
+  position: fixed;
+  right: auto;
+  top: auto;
+  z-index: 111;
 }
 
 /* ===== 居中配对弹窗 + 灰色遮罩 ===== */
