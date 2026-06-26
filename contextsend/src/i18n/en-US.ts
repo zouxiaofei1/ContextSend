@@ -127,4 +127,15 @@ export default {
     name: 'Name',
     loading: 'Loading…',
   },
+  toast: {
+    receiveFailed: 'Receive failed: {error}',
+    pairingFailed: 'Pairing failed: {reason}',
+    pushFailed: 'Push failed: {error}',
+    rejectFailed: 'Reject failed: {error}',
+    importAppSuccessChatBox:
+      'Written to {app}; the sidebar has refreshed — the new conversation is visible',
+    importAppSuccess:
+      'Written to {app}; switch back to the {app} window to see the new conversation',
+    importAppFailed: 'Import to {app} failed: {error}',
+  },
 }

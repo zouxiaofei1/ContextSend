@@ -126,4 +126,13 @@ export default {
     name: '名称',
     loading: '加载中…',
   },
+  toast: {
+    receiveFailed: '接收失败：{error}',
+    pairingFailed: '配对失败：{reason}',
+    pushFailed: '推送失败：{error}',
+    rejectFailed: '拒绝失败：{error}',
+    importAppSuccessChatBox: '已写入 {app}，侧栏已刷新即可看到新会话',
+    importAppSuccess: '已写入 {app}，切回 {app} 窗口即可看到新会话',
+    importAppFailed: '导入到 {app} 失败：{error}',
+  },
 }

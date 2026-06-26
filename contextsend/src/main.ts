@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
-import { createI18nInstance } from './i18n'
+import { createI18nInstance, registerI18n } from './i18n'
 import { useSettingsStore } from './stores/settings'
 import './styles.css'
 
@@ -15,6 +15,7 @@ const settingsStore = useSettingsStore()
 
 // 根据持久化设置初始化 i18n
 const i18n = createI18nInstance(settingsStore.locale)
+registerI18n(i18n)
 app.use(i18n)
 
 // 挂载前恢复主题

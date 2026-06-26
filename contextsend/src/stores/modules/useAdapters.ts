@@ -1,0 +1,58 @@
+import { invoke } from '@tauri-apps/api/core'
+import { IPC, ADAPTER_CHATBOX } from '../../constants'
+import { translate as t } from '../../i18n'
+import { useToastStore } from '../toast'
+import type { Conversation } from '../types'
+
+/**
+ * 适配器导入 / 导出模块：OpenAI Compatible JSON 互转，上下文片段匹配，
+ * 以及把对话写入本机 Chat AI 应用（Jan / ChatBox）。均为无状态的 IPC 封装。
+ */
+export function useAdapters() {
+  const toast = useToastStore()
+
+  /** 导入 OpenAI Compatible JSON 文本。 */
+  async function importOpenai(json: string): Promise<Conversation> {
+    return await invoke<Conversation>(IPC.IMPORT_OPENAI, { json })
+  }
+
+  /** 导出对话为 OpenAI Compatible JSON 文本。 */
+  async function exportOpenai(conversation: Conversation): Promise<string> {
+    return await invoke<string>(IPC.EXPORT_OPENAI, { conversation })
+  }
+
+  /**
+   * 把一段复制 / 拖入的上下文片段匹配回本地应用里的完整会话（导出方向）。
+   * 命中则返回整条会话，未命中则把片段包成占位会话；片段过短后端会报错。
+   */
+  async function matchContext(
+    snippet: string,
+  ): Promise<{ matched: boolean; app: string | null; score: number; conversation: Conversation }> {
+    return await invoke(IPC.MATCH_CONTEXT, { snippet })
+  }
+
+  /**
+   * 把一段对话导入到本机指定的 Chat AI 应用（写入其存储，使其出现新会话标签页）。
+   *
+   * - Jan：写文件，需切回 Jan 窗口（或重启）才刷新。
+   * - ChatBox：经 CDP 注入并自动刷新侧栏；需 ChatBox 已带
+   *   `--remote-debugging-port=9222` 启动，否则后端返回提示错误。
+   */
+  async function importToApp(conversation: Conversation, appName: string): Promise<void> {
+    try {
+      await invoke<{ app: string; threadId: string }>(IPC.IMPORT_TO_APP, {
+        app: appName,
+        conversation,
+      })
+      const key =
+        appName.toLowerCase() === ADAPTER_CHATBOX.toLowerCase()
+          ? 'toast.importAppSuccessChatBox'
+          : 'toast.importAppSuccess'
+      toast.success(t(key, { app: appName }))
+    } catch (e) {
+      toast.error(t('toast.importAppFailed', { app: appName, error: String(e) }))
+    }
+  }
+
+  return { importOpenai, exportOpenai, matchContext, importToApp }
+}
