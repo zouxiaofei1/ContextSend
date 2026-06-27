@@ -13,6 +13,8 @@ const { t } = useI18n()
 
 /** 超过此行数的代码块默认折叠。 */
 const FOLD_LINES = 24
+/** 折叠后仍显示前 N 行作为预览。 */
+const PREVIEW_LINES = 10
 
 /** 多模态内容块，对齐 cs-core 的 ContentPart。 */
 interface TextPart {
@@ -116,10 +118,19 @@ function enhanceBlock(pre: HTMLElement): void {
   area.className = 'code-area'
   area.append(gutter, scroll)
 
-  // 代码折叠：超过阈值的长代码默认折叠，点击头部箭头切换。
+  // 代码折叠：超过阈值的长代码默认折叠，显示前 PREVIEW_LINES 行预览；
+  // 点击头部箭头切换展开/折叠。
   let collapsed = lineCount > FOLD_LINES
   const applyFold = (): void => {
-    area.style.display = collapsed ? 'none' : ''
+    if (collapsed) {
+      // max-height 含：N 行内容 + 上下 padding。calc 中 1.5em 对应 line-height，
+      // 1.5rem 对应 gutter/code 的 padding-top + padding-bottom。
+      area.style.maxHeight = `calc(${PREVIEW_LINES} * 1.5em + 1.5rem)`
+      area.style.overflow = 'hidden'
+    } else {
+      area.style.maxHeight = ''
+      area.style.overflow = ''
+    }
     toggle.textContent = collapsed ? '▸' : '▾'
     toggle.setAttribute('aria-expanded', String(!collapsed))
   }

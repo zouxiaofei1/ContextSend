@@ -41,6 +41,8 @@ const ICONS: Record<ToastType, string> = {
   gap: 0.5rem;
   /* 容器不拦截点击，仅 toast 卡片本身可交互 */
   pointer-events: none;
+  /* 固定宽度：防止 toast 离开时容器收缩导致文字重新换行 */
+  width: min(360px, calc(100vw - 32px));
   max-width: min(360px, calc(100vw - 32px));
 }
 
@@ -138,13 +140,14 @@ const ICONS: Record<ToastType, string> = {
 }
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(16px) scale(0.96);
+  transform: translateX(8px) scale(0.98);
 }
-/* 离开时脱离布局，使其余 toast 通过 move 平滑上移补位 */
+/* 离开时脱离布局，使其余 toast 通过 move 平滑上移补位；
+   保持 left/right 约束而非 width:100%（避免容器宽度变化时文字重排） */
 .toast-leave-active {
   position: absolute;
+  left: 0;
   right: 0;
-  width: 100%;
 }
 .toast-move {
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
