@@ -23,10 +23,6 @@ const pushConversation = computed<Conversation>(() => {
   }
 })
 
-/**
- * 设备排序：在线优先，离线沉底；同组内本机优先，再按名称稳定排序。
- * 离线设备不再消失，而是默认排在列表最下面。
- */
 const sortedDevices = computed(() => {
   const selfId = app.identity?.uuid
   return [...app.devices].sort((a, b) => {

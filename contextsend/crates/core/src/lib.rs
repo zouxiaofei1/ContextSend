@@ -9,7 +9,9 @@
 mod message;
 pub mod openai;
 
-pub use message::{ChatMessage, ContentPart, ImageUrl, MessageContent, Role};
+pub use message::{
+    ChatMessage, ContentPart, ImageUrl, MessageContent, MessageMetadata, Role, TokenUsage,
+};
 
 use serde::{Deserialize, Serialize};
 

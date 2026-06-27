@@ -26,13 +26,6 @@ export function usePairing(deps: {
   const toast = useToastStore()
   const incoming = ref<IncomingPairing | null>(null)
   const outgoing = ref<OutgoingPairing | null>(null)
-
-  /**
-   * 接受入站对话时选定的「导入目标」，按来源 uuid 暂存。对话正文在
-   * `accept_incoming` 之后才经 `conversationReceived` 到达，故先记下目标，
-   * 等正文到达时再由门面取出路由（导入到适配器 / 落收件箱）。
-   * 值为适配器名表示导入到该应用；缺省 / 空表示落收件箱。
-   */
   const pendingDestinations = new Map<string, string>()
 
   /** 取出并清除某来源的待导入目标（正文到达时调用）。 */
@@ -68,15 +61,6 @@ export function usePairing(deps: {
       showPin: level >= 2,
     }
   }
-
-  /**
-   * 主动向设备推送对话。按本机对该设备的权限等级决定流程：
-   * - Level 1（已信任）：建立加密会话后直接推送，不弹窗、不展示 PIN；
-   * - Level 0（陌生人）：弹「发送给 X?」按名确认（不展示 PIN），确认后推送；
-   * - upgrade=true（升级到 Level 2）：展示 6 位配对码比对，确认后推送并写入 Level 2。
-   *
-   * 后台无论哪一级都走完整加密握手，区别只在是否展示/比对配对码。
-   */
   async function startPairing(
     targetUuid: string,
     conversation: Conversation,

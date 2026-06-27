@@ -1,9 +1,4 @@
 <script setup lang="ts">
-// 渲染一条消息的 content：纯文本走 Markdown；多模态数组中 text 块走 Markdown、
-// image_url 块渲染 <img>。内容来自对端，HTML 经 DOMPurify 净化（见 useMarkdown）。
-//
-// 代码块的交互（语言标签 / 复制 / 行号）在挂载后基于 useMarkdown 输出的
-// data-lang 占位结构做 DOM 增强，避免在 v-html 字符串里绑定事件。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { renderMarkdown, sanitizeSvg } from '../composables/useMarkdown'
@@ -51,10 +46,6 @@ function html(text: string): string {
 function enhanceBlock(pre: HTMLElement): void {
   const code = pre.querySelector('code')
   if (!code) return
-
-  // 去掉高亮 HTML 末尾的纯换行：markdown 代码块结尾的换行会被 white-space:pre 渲染成
-  // 一个没有对应行号的空视觉行，使 code 比 gutter 多一行、行号整体错位。先清理渲染层，
-  // 再据此统计行数，保证 gutter 行数与 code 视觉行数严格相等。
   code.innerHTML = code.innerHTML.replace(/\n+$/, '')
 
   const raw = code.textContent ?? ''
@@ -123,8 +114,6 @@ function enhanceBlock(pre: HTMLElement): void {
   let collapsed = lineCount > FOLD_LINES
   const applyFold = (): void => {
     if (collapsed) {
-      // max-height 含：N 行内容 + 上下 padding。calc 中 1.5em 对应 line-height，
-      // 1.5rem 对应 gutter/code 的 padding-top + padding-bottom。
       area.style.maxHeight = `calc(${PREVIEW_LINES} * 1.5em + 1.5rem)`
       area.style.overflow = 'hidden'
     } else {
@@ -233,17 +222,10 @@ function enhance(): void {
     }
   })
 }
-
-/**
- * Re-apply i18n text to already-enhanced code blocks when locale changes.
- * Only touches text content of known button classes; does not recreate DOM.
- */
 function refreshI18n(): void {
   const el = root.value
   if (!el) return
   el.querySelectorAll<HTMLElement>('pre.code-block[data-enhanced]').forEach((pre) => {
-    // Copy button: always safe to reset to "Copy" text; if a copy timer is
-    // active, it will re-apply with the new locale on next tick.
     const copyBtn = pre.querySelector<HTMLElement>('.code-copy')
     if (copyBtn) copyBtn.textContent = t('receive.copyCode')
 

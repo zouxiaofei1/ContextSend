@@ -10,13 +10,6 @@ async function getDataDir(): Promise<string> {
   }
   return dataDirCache
 }
-
-/**
- * 懒加载的 Tauri plugin-store（磁盘 JSON）包装：首次访问时 `load`，之后复用同一句柄。
- * get/set 失败仅 `console.error` 记录、不抛出，避免阻断 UI。
- *
- * 文件存储位置统一在应用数据根目录（`%LOCALAPPDATA%\ContextSend\`）下。
- */
 export function createPersistentStore(file: string) {
   let store: Store | null = null
 

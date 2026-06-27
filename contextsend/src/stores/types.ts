@@ -57,11 +57,31 @@ export interface Device {
  */
 export type PermissionLevel = -1 | 0 | 1 | 2
 
+/** 一条消息的 token 用量明细（与 Rust `TokenUsage` 对齐，字段均可选）。 */
+export interface TokenUsage {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  reasoningTokens?: number
+  cachedInputTokens?: number
+}
+
+/** 一条消息的生成元数据（与 Rust `MessageMetadata` 对齐，通常仅 assistant 消息携带）。 */
+export interface MessageMetadata {
+  model?: string
+  provider?: string
+  usage?: TokenUsage
+  firstTokenLatencyMs?: number
+  finishReason?: string
+}
+
 /** 一条对话消息（最小视图，多模态时 content 可能是数组）。 */
 export interface ChatMessage {
   role: string
   content: unknown
   name?: string
+  /** 生成元数据（模型 / token 用量 / 首字延迟）；由支持的适配器读取时填充。 */
+  metadata?: MessageMetadata
 }
 
 /** 一段对话，对应 Rust `Conversation`。 */

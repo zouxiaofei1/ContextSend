@@ -91,6 +91,78 @@ impl From<&str> for MessageContent {
     }
 }
 
+/// 一条消息的 token 用量明细，对齐各家（OpenAI / Anthropic）通用口径。
+///
+/// 字段全部可选：来源应用提供多少就填多少（如 ChatBox 给出 input/output/total
+/// 及 reasoning/cached 细分）。空字段不序列化，保持载荷紧凑。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsage {
+    /// 输入（提示）token 数。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_tokens: Option<u64>,
+    /// 输出（补全）token 数。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u64>,
+    /// 总 token 数（通常 = input + output）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u64>,
+    /// 其中思维链 / 推理消耗的 token 数。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<u64>,
+    /// 命中缓存而无需重新计费的输入 token 数。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_input_tokens: Option<u64>,
+}
+
+impl TokenUsage {
+    /// 是否完全为空（所有字段均为 `None`），用于决定是否附带 usage。
+    pub fn is_empty(&self) -> bool {
+        self.input_tokens.is_none()
+            && self.output_tokens.is_none()
+            && self.total_tokens.is_none()
+            && self.reasoning_tokens.is_none()
+            && self.cached_input_tokens.is_none()
+    }
+}
+
+/// 一条消息的生成元数据：模型、token 用量、首字延迟等。
+///
+/// 通常仅 assistant 消息携带，由支持的适配器（如 ChatBox）在读取时填充，
+/// 随对话一起在设备间传输并可写回目标应用。**非 OpenAI 标准 message 字段**，
+/// 故全部可选 + 空则不序列化：对纯文本 / OpenAI 导入的会话完全无影响，
+/// 粘贴到 OpenAI 兼容端点时这些额外字段会被忽略。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageMetadata {
+    /// 生成该消息所用的模型标识（来源应用的展示名，如 `OpenAI API (gpt-4o)`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// AI 提供方标识（如 `openai` / `anthropic`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    /// token 用量明细（空则不附带）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<TokenUsage>,
+    /// 首 token 延迟（毫秒）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_token_latency_ms: Option<u64>,
+    /// 结束原因（如 `stop` / `length` / `tool_calls`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
+}
+
+impl MessageMetadata {
+    /// 是否完全为空（无任何元数据），用于决定是否附带到消息上。
+    pub fn is_empty(&self) -> bool {
+        self.model.is_none()
+            && self.provider.is_none()
+            && self.first_token_latency_ms.is_none()
+            && self.finish_reason.is_none()
+            && self.usage.as_ref().is_none_or(TokenUsage::is_empty)
+    }
+}
+
 /// 单条对话消息。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -99,6 +171,10 @@ pub struct ChatMessage {
     /// 可选的消息名（OpenAI 中用于区分 tool / 多用户场景）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// 可选的生成元数据（模型 / token 用量 / 首字延迟等）。
+    /// 由支持的适配器读取时填充；纯文本 / OpenAI 导入的会话为 `None`。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<MessageMetadata>,
 }
 
 impl ChatMessage {
@@ -108,6 +184,7 @@ impl ChatMessage {
             role,
             content: MessageContent::Text(content.into()),
             name: None,
+            metadata: None,
         }
     }
 
@@ -159,6 +236,7 @@ mod tests {
                 },
             ]),
             name: None,
+            metadata: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"type\":\"text\""));
@@ -176,5 +254,50 @@ mod tests {
             serde_json::from_str(r#"{"role":"assistant","content":"嗯"}"#).unwrap();
         assert_eq!(msg.content, MessageContent::Text("嗯".into()));
         assert_eq!(msg.text(), "嗯");
+        assert!(msg.metadata.is_none());
+    }
+
+    #[test]
+    fn metadata_is_skipped_when_absent_and_roundtrips_when_present() {
+        // 无元数据：序列化不应出现 metadata 字段（向后兼容、载荷紧凑）。
+        let plain = ChatMessage::user("你好");
+        let json = serde_json::to_string(&plain).unwrap();
+        assert!(!json.contains("metadata"));
+
+        // 有元数据：camelCase 字段往返一致。
+        let msg = ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text("答复".into()),
+            name: None,
+            metadata: Some(MessageMetadata {
+                model: Some("OpenAI API (gpt-4o)".into()),
+                provider: Some("openai".into()),
+                usage: Some(TokenUsage {
+                    input_tokens: Some(15),
+                    output_tokens: Some(415),
+                    total_tokens: Some(430),
+                    reasoning_tokens: Some(0),
+                    cached_input_tokens: Some(0),
+                }),
+                first_token_latency_ms: Some(10319),
+                finish_reason: Some("stop".into()),
+            }),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"firstTokenLatencyMs\":10319"));
+        assert!(json.contains("\"totalTokens\":430"));
+        let back: ChatMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn metadata_is_empty_detects_blank() {
+        assert!(MessageMetadata::default().is_empty());
+        assert!(TokenUsage::default().is_empty());
+        let with_model = MessageMetadata {
+            model: Some("x".into()),
+            ..Default::default()
+        };
+        assert!(!with_model.is_empty());
     }
 }

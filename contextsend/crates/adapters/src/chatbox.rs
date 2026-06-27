@@ -19,7 +19,10 @@
 
 use std::time::Duration;
 
-use cs_core::{ChatMessage, Conversation, Role};
+use cs_core::{
+    ChatMessage, ContentPart, Conversation, ImageUrl, MessageContent, MessageMetadata, Role,
+    TokenUsage,
+};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -59,6 +62,63 @@ fn parse_role(s: &str) -> Role {
         "tool" => Role::Tool,
         _ => Role::User,
     }
+}
+
+/// 把一条 [`ChatMessage`] 转成注入脚本期望的 `parts` 数组。
+///
+/// - 纯文本消息 → 单个 `{type:'text', text}`。
+/// - 多模态消息 → 文本块转 `{type:'text',..}`、图像块转 `{type:'image', url}`
+///   （`url` 直接传 [`ImageUrl::url`]，可以是 `data:` dataURL 或 `http(s)` 链接，
+///   注入脚本会把它经 `setStoreBlob` 落进 ChatBox 的 blob 存储）。
+fn message_to_parts(m: &ChatMessage) -> Vec<Value> {
+    match &m.content {
+        MessageContent::Text(t) => vec![serde_json::json!({ "type": "text", "text": t })],
+        MessageContent::Parts(parts) => parts
+            .iter()
+            .map(|p| match p {
+                ContentPart::Text { text } => serde_json::json!({ "type": "text", "text": text }),
+                ContentPart::ImageUrl { image_url } => {
+                    serde_json::json!({ "type": "image", "url": image_url.url })
+                }
+            })
+            .collect(),
+    }
+}
+
+/// 把 [`MessageMetadata`] 转成注入脚本期望的 `meta` 对象（camelCase，空字段省略）。
+///
+/// 与 [`parse_metadata`] 对称：仅写出有值的字段，`usage` 同理逐字段省略空值；
+/// 注入脚本据此还原 ChatBox 的 `model`/`aiProvider`/`firstTokenLatency`/
+/// `finishReason`/`tokensUsed`/`usage`。
+fn metadata_to_json(meta: &MessageMetadata) -> Value {
+    let mut obj = serde_json::Map::new();
+    if let Some(m) = &meta.model {
+        obj.insert("model".into(), Value::String(m.clone()));
+    }
+    if let Some(p) = &meta.provider {
+        obj.insert("provider".into(), Value::String(p.clone()));
+    }
+    if let Some(l) = meta.first_token_latency_ms {
+        obj.insert("firstTokenLatency".into(), Value::from(l));
+    }
+    if let Some(f) = &meta.finish_reason {
+        obj.insert("finishReason".into(), Value::String(f.clone()));
+    }
+    if let Some(u) = meta.usage.as_ref().filter(|u| !u.is_empty()) {
+        let mut um = serde_json::Map::new();
+        let mut put = |k: &str, v: Option<u64>| {
+            if let Some(v) = v {
+                um.insert(k.into(), Value::from(v));
+            }
+        };
+        put("inputTokens", u.input_tokens);
+        put("outputTokens", u.output_tokens);
+        put("totalTokens", u.total_tokens);
+        put("reasoningTokens", u.reasoning_tokens);
+        put("cachedInputTokens", u.cached_input_tokens);
+        obj.insert("usage".into(), Value::Object(um));
+    }
+    Value::Object(obj)
 }
 
 /// 为会话取一个展示标题：优先 `title`，否则取首条非空消息前若干字，再退到默认。
@@ -233,9 +293,19 @@ async fn cdp_evaluate(
 
 /// 构造写入会话 + 更新侧栏列表的注入脚本。
 ///
-/// `payload` 形如 `{"name":..., "messages":[{"role":..,"text":..}]}`，
-/// `session_id` 为新会话 id（由 Rust 生成）。脚本在页面 main world 用页面自身的
-/// `indexedDB` 写 `chatboxstore`，与 ChatBox 的 localforage 存储格式一致。
+/// `payload` 形如 `{"name":.., "messages":[{"role":.., "parts":[Part], "meta":{..}?}]}`，
+/// 其中 `Part` 是 `{"type":"text","text":..}` 或 `{"type":"image","url":<dataURL>}`，
+/// `meta`（可选）携带 `model`/`provider`/`firstTokenLatency`/`finishReason`/`usage`，
+/// 写回时还原成 ChatBox 自身的消息字段（`model`/`aiProvider`/`firstTokenLatency`/
+/// `finishReason`/`tokensUsed`/`usage`），使导入的会话也显示原始模型与用量统计。
+/// `session_id` 为新会话 id（由 Rust 生成）。
+///
+/// 脚本在页面 main world：
+/// 1. **先**把每个图片块的 dataURL 经 `electronAPI.invoke('setStoreBlob', key, url)`
+///    写入主进程 `chatbox-blobs/`（key 形如 `picture:<uuid>`），消息里换成
+///    `{type:'image', storageKey:key}`——这与 ChatBox 自身的图片存储格式一致。
+/// 2. **再**用页面自身的 `indexedDB` 写 `chatboxstore` 的 `session:<id>` 与侧栏列表。
+///    （图片写盘是异步 IPC，不能放进 IDB 事务内，故分两步。）
 fn build_import_script(session_id: &str, payload: &Value) -> String {
     // payload / id 以 JSON 字面量嵌入（JSON 是合法 JS 表达式）。
     format!(
@@ -243,17 +313,46 @@ fn build_import_script(session_id: &str, payload: &Value) -> String {
   const payload = {payload};
   const sid = {sid};
   const now = Date.now();
-  const session = {{
-    id: sid,
-    type: 'chat',
-    name: payload.name,
-    messages: payload.messages.map((m, i) => ({{
-      id: sid + '-' + i,
-      role: m.role,
-      contentParts: [{{ type: 'text', text: m.text }}],
-      timestamp: now + i,
-    }})),
+  const api = (typeof window !== 'undefined') ? (window.electronAPI || window.platform) : null;
+  const newKey = () => 'picture:' + ((crypto && crypto.randomUUID) ? crypto.randomUUID() : (sid + '-img-' + Math.random().toString(36).slice(2)));
+  // 把一条消息的 parts 转成 ChatBox 的 contentParts；图片先写 blob 再引用 storageKey。
+  const buildParts = async (parts) => {{
+    const out = [];
+    for (const p of (Array.isArray(parts) ? parts : [])) {{
+      if (p && p.type === 'image' && p.url) {{
+        let stored = false;
+        if (api && api.invoke) {{
+          try {{ const key = newKey(); await api.invoke('setStoreBlob', key, p.url); out.push({{ type: 'image', storageKey: key }}); stored = true; }} catch (e) {{ stored = false; }}
+        }}
+        if (!stored) out.push({{ type: 'text', text: '[图片]' }}); // 无写盘桥时降级
+      }} else if (p && p.type === 'text') {{
+        out.push({{ type: 'text', text: String(p.text || '') }});
+      }}
+    }}
+    if (out.length === 0) out.push({{ type: 'text', text: '' }});
+    return out;
   }};
+  // 把 meta 还原成 ChatBox 的消息字段（仅在确有值时写，避免污染 user 消息）。
+  const applyMeta = (msg, meta) => {{
+    if (!meta || typeof meta !== 'object') return;
+    if (meta.model != null) msg.model = meta.model;
+    if (meta.provider != null) msg.aiProvider = meta.provider;
+    if (typeof meta.firstTokenLatency === 'number') msg.firstTokenLatency = meta.firstTokenLatency;
+    if (meta.finishReason != null) msg.finishReason = meta.finishReason;
+    const u = meta.usage;
+    if (u && typeof u === 'object') {{
+      msg.usage = u;
+      if (typeof u.totalTokens === 'number') msg.tokensUsed = u.totalTokens;
+    }}
+  }};
+  const messages = [];
+  for (let i = 0; i < payload.messages.length; i++) {{
+    const m = payload.messages[i];
+    const msg = {{ id: sid + '-' + i, role: m.role, contentParts: await buildParts(m.parts), timestamp: now + i }};
+    applyMeta(msg, m.meta);
+    messages.push(msg);
+  }}
+  const session = {{ id: sid, type: 'chat', name: payload.name, messages }};
   const db = await new Promise((res, rej) => {{
     const r = indexedDB.open('chatboxstore');
     r.onsuccess = () => res(r.result);
@@ -301,7 +400,14 @@ pub async fn import_to_chatbox(convo: &Conversation) -> Result<String, AdapterEr
     let messages: Vec<Value> = convo
         .messages
         .iter()
-        .map(|m| serde_json::json!({ "role": role_str(m.role), "text": m.text() }))
+        .map(|m| {
+            let mut obj = serde_json::json!({ "role": role_str(m.role), "parts": message_to_parts(m) });
+            // 仅在有非空元数据时附带 meta，写回 ChatBox 的 model/usage/延迟等字段。
+            if let Some(meta) = m.metadata.as_ref().filter(|md| !md.is_empty()) {
+                obj["meta"] = metadata_to_json(meta);
+            }
+            obj
+        })
         .collect();
     let payload = serde_json::json!({
         "name": session_name(convo),
@@ -329,15 +435,26 @@ pub async fn import_to_chatbox(convo: &Conversation) -> Result<String, AdapterEr
 }
 
 /// 读取脚本：遍历 `chatboxstore` 里所有 `session:` 键，把每个会话**按话题(thread)
-/// 拆开**返回。
+/// 拆开**返回，并把图片块的 `storageKey` 解析成真正的图片数据。
 ///
 /// ChatBox 一个 session 含多个话题：当前活跃话题在 `session.messages`（名字在
 /// `session.threadName`），点"新话题"后旧话题归档进 `session.threads[]`（每个
 /// `{id,name,messages}`）。只读 `messages` 会漏掉所有历史话题，故这里把
 /// `threads[]` 的每个 + 当前 `messages` 都各自展开成一条 `{id,name,messages}`。
 ///
+/// **图片处理**：ChatBox 的图片块是 `{type:'image', storageKey:'picture:<uuid>'}`，
+/// 真正的字节（`data:image/...;base64,` dataURL）存在主进程文件系统的 `chatbox-blobs/`
+/// 目录里，渲染进程经 `electronAPI.invoke('getStoreBlob', storageKey)` 读取。脚本在
+/// 渲染进程内把每个图片块就地解析为 `{type:'image', url:<dataURL>}`（带缓存，避免对
+/// 同一 key 重复 IPC），解析失败则保留 `storageKey` 由 Rust 侧降级为占位符。
+///
+/// **元数据**：ChatBox 在 assistant 消息上记录 `model` / `aiProvider` /
+/// `firstTokenLatency`(ms) / `finishReason` / `usage`(input/output/total/reasoning/
+/// cached token)等。脚本把这些归一成每条消息的 `meta` 对象一并回传，由 Rust 侧
+/// [`parse_metadata`] 填入 [`MessageMetadata`]，随对话传输 / 展示。
+///
 /// 用页面自身的 localforage 存储格式解码（value 是 `JSON.stringify(Session)`），
-/// 不碰底层 LevelDB 编码，故稳定可靠。`contentParts` 原样回传，由 Rust 侧拼成文本。
+/// 不碰底层 LevelDB 编码，故稳定可靠。
 const READ_SCRIPT: &str = r#"(async () => {
   const db = await new Promise((res, rej) => {
     const r = indexedDB.open('chatboxstore');
@@ -358,10 +475,55 @@ const READ_SCRIPT: &str = r#"(async () => {
     };
     cur.onerror = () => rej(cur.error);
   });
-  const slim = (m) => ({
-    role: m && m.role ? String(m.role) : 'user',
-    contentParts: Array.isArray(m && m.contentParts) ? m.contentParts : [],
-  });
+  // 图片字节读取桥 + 缓存（同一 storageKey 只取一次）。
+  const blobCache = new Map();
+  const api = (typeof window !== 'undefined') ? (window.electronAPI || window.platform) : null;
+  const resolveBlob = async (key) => {
+    if (blobCache.has(key)) return blobCache.get(key);
+    let url = null;
+    try { if (api && api.invoke) url = await api.invoke('getStoreBlob', key); } catch (e) { url = null; }
+    blobCache.set(key, url);
+    return url;
+  };
+  // 把一条消息精简为 {role, contentParts, meta}，并把 image 块的 storageKey 解析成 url。
+  const slim = async (m) => {
+    const role = m && m.role ? String(m.role) : 'user';
+    const rawParts = Array.isArray(m && m.contentParts) ? m.contentParts : [];
+    const parts = [];
+    for (const p of rawParts) {
+      if (p && p.type === 'image' && p.storageKey) {
+        const url = await resolveBlob(String(p.storageKey));
+        parts.push(url ? { type: 'image', url } : { type: 'image', storageKey: String(p.storageKey) });
+      } else {
+        parts.push(p);
+      }
+    }
+    // 生成元数据：model / provider / 首字延迟 / finishReason / token 用量。
+    // 仅在确有字段时附带 meta，避免给 user 消息塞空对象。
+    let meta = null;
+    if (m && (m.model || m.aiProvider || m.usage || m.firstTokenLatency != null || m.finishReason || m.tokensUsed != null)) {
+      const u = (m.usage && typeof m.usage === 'object') ? m.usage : null;
+      meta = {
+        model: m.model != null ? String(m.model) : null,
+        provider: m.aiProvider != null ? String(m.aiProvider) : null,
+        firstTokenLatency: (typeof m.firstTokenLatency === 'number') ? m.firstTokenLatency : null,
+        finishReason: m.finishReason != null ? String(m.finishReason) : null,
+        usage: u ? {
+          inputTokens: (typeof u.inputTokens === 'number') ? u.inputTokens : null,
+          outputTokens: (typeof u.outputTokens === 'number') ? u.outputTokens : null,
+          totalTokens: (typeof u.totalTokens === 'number') ? u.totalTokens : ((typeof m.tokensUsed === 'number') ? m.tokensUsed : null),
+          reasoningTokens: (typeof u.reasoningTokens === 'number') ? u.reasoningTokens : null,
+          cachedInputTokens: (typeof u.cachedInputTokens === 'number') ? u.cachedInputTokens : null,
+        } : ((typeof m.tokensUsed === 'number') ? { totalTokens: m.tokensUsed } : null),
+      };
+    }
+    return { role, contentParts: parts, meta };
+  };
+  const slimAll = async (msgs) => {
+    const r = [];
+    for (const m of msgs) r.push(await slim(m));
+    return r;
+  };
   const out = [];
   for (const [key, raw] of entries) {
     let s;
@@ -374,11 +536,11 @@ const READ_SCRIPT: &str = r#"(async () => {
     if (Array.isArray(s.threads)) {
       for (const th of s.threads) {
         if (!th || !Array.isArray(th.messages)) continue;
-        out.push({ id: sid + ':' + (th.id || out.length), name: th.name || sessionName, messages: th.messages.map(slim) });
+        out.push({ id: sid + ':' + (th.id || out.length), name: th.name || sessionName, messages: await slimAll(th.messages) });
       }
     }
     // 当前活跃话题：名字优先 threadName，回退 session 名。
-    const curMsgs = Array.isArray(s.messages) ? s.messages.map(slim) : [];
+    const curMsgs = Array.isArray(s.messages) ? await slimAll(s.messages) : [];
     if (curMsgs.length > 0) {
       out.push({ id: sid, name: s.threadName || sessionName, messages: curMsgs });
     }
@@ -386,31 +548,111 @@ const READ_SCRIPT: &str = r#"(async () => {
   return out;
 })()"#;
 
-/// 把 ChatBox 的一条 `contentParts` 数组拼成纯文本（文本块直拼，其它块转占位符）。
-fn content_parts_to_text(parts: &Value) -> String {
+/// 把 ChatBox 的一条 `contentParts` 数组转成 cs-core 的 [`MessageContent`]。
+///
+/// - `text` / `reasoning` 块 → 文本，相邻文本会合并到同一个文本块。
+/// - `image` 块：读取脚本已把 `storageKey` 解析成 dataURL 放进 `url` 字段 →
+///   转成 [`ContentPart::ImageUrl`]（真正的图片得以保留）。解析失败（无 `url`，
+///   仅剩 `storageKey`）则降级为 `[图片]` 文本占位符。
+/// - `tool-call` 等其它块 → `[工具调用]` 文本占位符。
+///
+/// 若最终只有文本、没有图片，返回 [`MessageContent::Text`]（紧凑形态）；
+/// 含至少一个图片块时返回 [`MessageContent::Parts`]（多模态形态）。
+fn content_parts_to_content(parts: &Value) -> MessageContent {
     let Some(arr) = parts.as_array() else {
-        return String::new();
+        return MessageContent::Text(String::new());
     };
-    let mut out = String::new();
+    let mut result: Vec<ContentPart> = Vec::new();
+    // 把一段文本追加到结果：与上一个文本块合并，避免产生大量碎块。
+    let push_text = |result: &mut Vec<ContentPart>, t: &str| {
+        if t.is_empty() {
+            return;
+        }
+        if let Some(ContentPart::Text { text }) = result.last_mut() {
+            text.push_str(t);
+        } else {
+            result.push(ContentPart::Text { text: t.to_string() });
+        }
+    };
     for part in arr {
         match part.get("type").and_then(|t| t.as_str()) {
-            Some("text") => {
+            Some("text") | Some("reasoning") => {
                 if let Some(t) = part.get("text").and_then(|t| t.as_str()) {
-                    out.push_str(t);
+                    push_text(&mut result, t);
                 }
             }
-            Some("reasoning") => {
-                // 推理块的文本字段也叫 text。
-                if let Some(t) = part.get("text").and_then(|t| t.as_str()) {
-                    out.push_str(t);
+            Some("image") => {
+                // 读取脚本把字节解析进 url；拿到则保留为真正的图片块。
+                if let Some(url) = part.get("url").and_then(|u| u.as_str()).filter(|u| !u.is_empty())
+                {
+                    result.push(ContentPart::ImageUrl {
+                        image_url: ImageUrl {
+                            url: url.to_string(),
+                            detail: None,
+                        },
+                    });
+                } else {
+                    // 未能取到图片字节（如 ChatBox 未运行该桥）→ 占位符。
+                    push_text(&mut result, "[图片]");
                 }
             }
-            Some("image") => out.push_str("[图片]"),
-            Some("tool-call") => out.push_str("[工具调用]"),
+            Some("tool-call") => push_text(&mut result, "[工具调用]"),
             _ => {}
         }
     }
-    out
+
+    // 无图片 → 紧凑文本形态；含图片 → 多模态 Parts 形态。
+    let has_image = result
+        .iter()
+        .any(|p| matches!(p, ContentPart::ImageUrl { .. }));
+    if has_image {
+        MessageContent::Parts(result)
+    } else {
+        let text = result
+            .into_iter()
+            .map(|p| match p {
+                ContentPart::Text { text } => text,
+                ContentPart::ImageUrl { .. } => String::new(),
+            })
+            .collect::<String>();
+        MessageContent::Text(text)
+    }
+}
+
+/// 从读取脚本回传的 `meta` 对象解析出 [`MessageMetadata`]；空 / 缺失返回 `None`。
+///
+/// 脚本已把字段名归一为 camelCase（`model` / `provider` / `firstTokenLatency` /
+/// `finishReason` / `usage.{input,output,total,reasoning,cachedInput}Tokens`），
+/// 这里逐字段取值并跳过空串 / 非数值，最终全空则不附带元数据。
+fn parse_metadata(meta: &Value) -> Option<MessageMetadata> {
+    if !meta.is_object() {
+        return None;
+    }
+    let s = |k: &str| {
+        meta.get(k)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+    };
+    let usage = meta.get("usage").filter(|u| u.is_object()).map(|u| {
+        let n = |k: &str| u.get(k).and_then(serde_json::Value::as_u64);
+        TokenUsage {
+            input_tokens: n("inputTokens"),
+            output_tokens: n("outputTokens"),
+            total_tokens: n("totalTokens"),
+            reasoning_tokens: n("reasoningTokens"),
+            cached_input_tokens: n("cachedInputTokens"),
+        }
+    });
+    let metadata = MessageMetadata {
+        model: s("model"),
+        provider: s("provider"),
+        usage: usage.filter(|u| !u.is_empty()),
+        first_token_latency_ms: meta.get("firstTokenLatency").and_then(Value::as_u64),
+        finish_reason: s("finishReason"),
+    };
+    (!metadata.is_empty()).then_some(metadata)
 }
 
 /// 把读取脚本返回的精简会话 JSON 数组映射为 [`Conversation`] 列表。
@@ -434,11 +676,23 @@ fn sessions_json_to_conversations(value: &Value) -> Vec<Conversation> {
                     .and_then(|r| r.as_str())
                     .map(parse_role)
                     .unwrap_or(Role::User);
-                let text = m
+                let content = m
                     .get("contentParts")
-                    .map(content_parts_to_text)
-                    .unwrap_or_default();
-                convo.messages.push(ChatMessage::new(role, text));
+                    .map(content_parts_to_content)
+                    .unwrap_or_else(|| MessageContent::Text(String::new()));
+                let metadata = m.get("meta").and_then(parse_metadata);
+                // 用首条带模型的消息回填会话级 model（便于卡片标题 / 列表展示）。
+                if convo.model.is_none() {
+                    if let Some(model) = metadata.as_ref().and_then(|md| md.model.clone()) {
+                        convo.model = Some(model);
+                    }
+                }
+                convo.messages.push(ChatMessage {
+                    role,
+                    content,
+                    name: None,
+                    metadata,
+                });
             }
         }
         convos.push(convo);
@@ -489,19 +743,81 @@ mod tests {
     }
 
     #[test]
-    fn content_parts_join_text_and_placeholders() {
+    fn content_parts_text_only_yields_text_content() {
+        // 无图片 → 紧凑文本形态，相邻文本合并，未知图片(无 url)降级为占位符。
         let parts = serde_json::json!([
             { "type": "text", "text": "你好" },
             { "type": "image", "storageKey": "x" },
             { "type": "text", "text": "世界" },
         ]);
-        assert_eq!(content_parts_to_text(&parts), "你好[图片]世界");
+        let content = content_parts_to_content(&parts);
+        assert_eq!(content, MessageContent::Text("你好[图片]世界".into()));
+        assert!(!content.has_image());
     }
 
     #[test]
-    fn content_parts_empty_is_empty_string() {
-        assert_eq!(content_parts_to_text(&serde_json::json!([])), "");
-        assert_eq!(content_parts_to_text(&serde_json::Value::Null), "");
+    fn content_parts_with_resolved_image_yields_multimodal() {
+        // 读取脚本已把 storageKey 解析进 url → 应保留为真正的图片块。
+        let parts = serde_json::json!([
+            { "type": "text", "text": "看这张" },
+            { "type": "image", "url": "data:image/png;base64,AAAA" },
+        ]);
+        let content = content_parts_to_content(&parts);
+        assert!(content.has_image());
+        match content {
+            MessageContent::Parts(p) => {
+                assert_eq!(p.len(), 2);
+                assert!(matches!(&p[0], ContentPart::Text { text } if text == "看这张"));
+                assert!(
+                    matches!(&p[1], ContentPart::ImageUrl { image_url } if image_url.url == "data:image/png;base64,AAAA")
+                );
+            }
+            _ => panic!("含图片应为 Parts 形态"),
+        }
+    }
+
+    #[test]
+    fn content_parts_empty_is_empty_text() {
+        assert_eq!(
+            content_parts_to_content(&serde_json::json!([])),
+            MessageContent::Text(String::new())
+        );
+        assert_eq!(
+            content_parts_to_content(&serde_json::Value::Null),
+            MessageContent::Text(String::new())
+        );
+    }
+
+    #[test]
+    fn message_to_parts_maps_text_and_image() {
+        // 纯文本消息 → 单个 text part。
+        let text_msg = ChatMessage::user("你好");
+        let parts = message_to_parts(&text_msg);
+        assert_eq!(parts, vec![serde_json::json!({ "type": "text", "text": "你好" })]);
+
+        // 多模态消息 → text + image(url) part，url 原样透传给注入脚本。
+        let img_msg = ChatMessage {
+            role: Role::User,
+            content: MessageContent::Parts(vec![
+                ContentPart::Text { text: "看图".into() },
+                ContentPart::ImageUrl {
+                    image_url: ImageUrl {
+                        url: "data:image/png;base64,BBBB".into(),
+                        detail: None,
+                    },
+                },
+            ]),
+            name: None,
+            metadata: None,
+        };
+        let parts = message_to_parts(&img_msg);
+        assert_eq!(
+            parts,
+            vec![
+                serde_json::json!({ "type": "text", "text": "看图" }),
+                serde_json::json!({ "type": "image", "url": "data:image/png;base64,BBBB" }),
+            ]
+        );
     }
 
     #[test]
@@ -532,6 +848,131 @@ mod tests {
     }
 
     #[test]
+    fn parse_metadata_extracts_model_usage_latency() {
+        // 模拟读取脚本回传的 meta（已归一为 camelCase）。
+        let meta = serde_json::json!({
+            "model": "OpenAI API (gpt-4o)",
+            "provider": "openai",
+            "firstTokenLatency": 10319,
+            "finishReason": "stop",
+            "usage": {
+                "inputTokens": 15,
+                "outputTokens": 415,
+                "totalTokens": 430,
+                "reasoningTokens": 0,
+                "cachedInputTokens": 0
+            }
+        });
+        let md = parse_metadata(&meta).expect("应解析出元数据");
+        assert_eq!(md.model.as_deref(), Some("OpenAI API (gpt-4o)"));
+        assert_eq!(md.provider.as_deref(), Some("openai"));
+        assert_eq!(md.first_token_latency_ms, Some(10319));
+        assert_eq!(md.finish_reason.as_deref(), Some("stop"));
+        let u = md.usage.expect("应有 usage");
+        assert_eq!(u.input_tokens, Some(15));
+        assert_eq!(u.output_tokens, Some(415));
+        assert_eq!(u.total_tokens, Some(430));
+    }
+
+    #[test]
+    fn parse_metadata_blank_yields_none() {
+        assert!(parse_metadata(&serde_json::json!({})).is_none());
+        assert!(parse_metadata(&serde_json::Value::Null).is_none());
+        // 仅空串 / 空 usage 也视为无元数据。
+        assert!(parse_metadata(&serde_json::json!({ "model": "  ", "usage": {} })).is_none());
+    }
+
+    #[test]
+    fn sessions_json_maps_metadata_and_backfills_model() {
+        let value = serde_json::json!([
+            {
+                "id": "s3",
+                "name": "带统计对话",
+                "messages": [
+                    { "role": "user", "contentParts": [{ "type": "text", "text": "问" }] },
+                    { "role": "assistant", "contentParts": [{ "type": "text", "text": "答" }],
+                      "meta": {
+                          "model": "OpenAI API (gemini-3-flash-preview)",
+                          "provider": "openai",
+                          "firstTokenLatency": 5949,
+                          "finishReason": "stop",
+                          "usage": { "totalTokens": 1792, "reasoningTokens": 595 }
+                      }
+                    }
+                ]
+            }
+        ]);
+        let convos = sessions_json_to_conversations(&value);
+        assert_eq!(convos.len(), 1);
+        // 会话级 model 由首条带模型的消息回填。
+        assert_eq!(
+            convos[0].model.as_deref(),
+            Some("OpenAI API (gemini-3-flash-preview)")
+        );
+        // user 消息无元数据。
+        assert!(convos[0].messages[0].metadata.is_none());
+        // assistant 消息携带模型 / 延迟 / 用量。
+        let md = convos[0].messages[1].metadata.as_ref().expect("assistant 应有元数据");
+        assert_eq!(md.first_token_latency_ms, Some(5949));
+        assert_eq!(md.usage.as_ref().unwrap().total_tokens, Some(1792));
+        assert_eq!(md.usage.as_ref().unwrap().reasoning_tokens, Some(595));
+    }
+
+    #[test]
+    fn metadata_json_roundtrips_through_parse() {
+        // metadata_to_json（导入写回）与 parse_metadata（读取解析）应对称。
+        let md = MessageMetadata {
+            model: Some("OpenAI API (gpt-4o)".into()),
+            provider: Some("openai".into()),
+            usage: Some(TokenUsage {
+                input_tokens: Some(15),
+                output_tokens: Some(415),
+                total_tokens: Some(430),
+                reasoning_tokens: None,
+                cached_input_tokens: None,
+            }),
+            first_token_latency_ms: Some(10319),
+            finish_reason: Some("stop".into()),
+        };
+        let json = metadata_to_json(&md);
+        // 空字段不应出现。
+        assert!(json.get("usage").unwrap().get("reasoningTokens").is_none());
+        let back = parse_metadata(&json).expect("应能解析回来");
+        assert_eq!(back, md);
+    }
+
+    #[test]
+    fn read_script_carries_metadata() {
+        // 读取脚本必须把 model / 用量 / 首字延迟归一到每条消息的 meta。
+        assert!(READ_SCRIPT.contains("firstTokenLatency"));
+        assert!(READ_SCRIPT.contains("aiProvider"));
+        assert!(READ_SCRIPT.contains("usage"));
+        assert!(READ_SCRIPT.contains("meta"));
+    }
+
+    #[test]
+    fn sessions_json_preserves_resolved_images() {
+        // 读取脚本解析出的 image(url) 应映射为多模态消息，图片得以保留。
+        let value = serde_json::json!([
+            {
+                "id": "s2",
+                "name": "带图对话",
+                "messages": [
+                    { "role": "user", "contentParts": [
+                        { "type": "text", "text": "这是啥" },
+                        { "type": "image", "url": "data:image/png;base64,CCCC" }
+                    ]}
+                ]
+            }
+        ]);
+        let convos = sessions_json_to_conversations(&value);
+        assert_eq!(convos.len(), 1);
+        let msg = &convos[0].messages[0];
+        assert!(msg.content.has_image());
+        assert_eq!(msg.text(), "这是啥[图片]"); // 文本视图仍以占位符表示图片
+    }
+
+    #[test]
     fn read_script_scopes_to_session_prefix() {
         assert!(READ_SCRIPT.contains("chatboxstore"));
         assert!(READ_SCRIPT.contains("session:"));
@@ -539,6 +980,9 @@ mod tests {
         // 必须展开历史话题，而非只读当前 messages。
         assert!(READ_SCRIPT.contains("s.threads"));
         assert!(READ_SCRIPT.contains("threadName"));
+        // 必须经 getStoreBlob 把图片 storageKey 解析成真正的字节。
+        assert!(READ_SCRIPT.contains("getStoreBlob"));
+        assert!(READ_SCRIPT.contains("storageKey"));
     }
 
     #[test]
@@ -611,7 +1055,10 @@ mod tests {
     fn import_script_embeds_payload_and_id() {
         let payload = serde_json::json!({
             "name": "测试",
-            "messages": [{ "role": "user", "text": "你好" }]
+            "messages": [{ "role": "user", "parts": [
+                { "type": "text", "text": "你好" },
+                { "type": "image", "url": "data:image/png;base64,DDDD" }
+            ]}]
         });
         let script = build_import_script("abc-123", &payload);
         assert!(script.contains("chatboxstore"));
@@ -619,7 +1066,57 @@ mod tests {
         assert!(script.contains("chat-sessions-list"));
         assert!(script.contains("\"abc-123\""));
         assert!(script.contains("你好"));
+        assert!(script.contains("data:image/png;base64,DDDD"));
         // session 值以 JSON 字符串写入（localforage 兼容）。
         assert!(script.contains("JSON.stringify(session)"));
+        // 图片块经 setStoreBlob 写入 ChatBox 的 blob 存储，引用 storageKey。
+        assert!(script.contains("setStoreBlob"));
+        assert!(script.contains("storageKey"));
+        assert!(script.contains("picture:"));
+        // 元数据写回：脚本含 applyMeta，还原 model/aiProvider/tokensUsed 等字段。
+        assert!(script.contains("applyMeta"));
+        assert!(script.contains("aiProvider"));
+        assert!(script.contains("tokensUsed"));
+    }
+
+    #[test]
+    fn import_payload_includes_metadata_for_assistant() {
+        // 带元数据的 assistant 消息，导入 payload 应附 meta（写回 ChatBox 统计字段）。
+        let mut convo = Conversation::new();
+        convo.messages.push(ChatMessage::user("问"));
+        convo.messages.push(ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text("答".into()),
+            name: None,
+            metadata: Some(MessageMetadata {
+                model: Some("OpenAI API (gpt-4o)".into()),
+                provider: Some("openai".into()),
+                usage: Some(TokenUsage {
+                    total_tokens: Some(430),
+                    ..Default::default()
+                }),
+                first_token_latency_ms: Some(10319),
+                finish_reason: Some("stop".into()),
+            }),
+        });
+        // 复刻 import_to_chatbox 的 payload 构造逻辑。
+        let messages: Vec<Value> = convo
+            .messages
+            .iter()
+            .map(|m| {
+                let mut obj =
+                    serde_json::json!({ "role": role_str(m.role), "parts": message_to_parts(m) });
+                if let Some(meta) = m.metadata.as_ref().filter(|md| !md.is_empty()) {
+                    obj["meta"] = metadata_to_json(meta);
+                }
+                obj
+            })
+            .collect();
+        // user 无 meta，assistant 有 meta。
+        assert!(messages[0].get("meta").is_none());
+        let meta = messages[1].get("meta").expect("assistant 应带 meta");
+        assert_eq!(meta["model"], "OpenAI API (gpt-4o)");
+        assert_eq!(meta["firstTokenLatency"], 10319);
+        assert_eq!(meta["usage"]["totalTokens"], 430);
     }
 }

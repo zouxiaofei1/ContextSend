@@ -7,6 +7,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, type ChatMessage, type ConversationSegment } from '../stores/app'
+import type { MessageMetadata } from '../stores/app'
 import { useToastStore } from '../stores/toast'
 import { ADAPTER_JAN, ADAPTER_CHATBOX } from '../constants'
 import { exportConversation, type ExportFormat } from '../utils/conversationExport'
@@ -36,6 +37,38 @@ function fmtTime(ts: number): string {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** 首字延迟：≥1s 用秒（保留一位小数），否则用毫秒。 */
+function fmtLatency(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`
+}
+
+/**
+ * 把一条消息的生成元数据拼成展示用的小标签数组（模型 / token 用量 / 首字延迟）。
+ * 仅在确有元数据时返回非空；纯文本 / 无统计的消息返回空数组（不渲染该行）。
+ */
+function metaChips(meta: MessageMetadata | undefined): string[] {
+  if (!meta) return []
+  const chips: string[] = []
+  if (meta.model) chips.push(meta.model)
+  const u = meta.usage
+  if (u) {
+    const total = u.totalTokens ?? (u.inputTokens ?? 0) + (u.outputTokens ?? 0)
+    if (total) {
+      let tok = t('receive.metaTokens', { count: total })
+      if (u.inputTokens != null && u.outputTokens != null) {
+        tok += ` (${t('receive.metaTokensDetail', { input: u.inputTokens, output: u.outputTokens })})`
+      }
+      chips.push(tok)
+    }
+    if (u.reasoningTokens) chips.push(t('receive.metaReasoning', { count: u.reasoningTokens }))
+  }
+  if (meta.firstTokenLatencyMs != null) {
+    chips.push(t('receive.metaLatency', { value: fmtLatency(meta.firstTokenLatencyMs) }))
+  }
+  if (meta.finishReason && meta.finishReason !== 'stop') chips.push(meta.finishReason)
+  return chips
 }
 
 /** 取消息可编辑文本：多模态时合并所有 text 块。 */
@@ -182,6 +215,9 @@ onBeforeUnmount(() => {
       <div v-for="(m, i) in segment.conversation.messages" :key="i" class="msg">
         <b class="msg-role">{{ m.role }}</b>
         <MarkdownContent :content="m.content" />
+        <div v-if="metaChips(m.metadata).length" class="msg-meta muted">
+          <span v-for="(chip, ci) in metaChips(m.metadata)" :key="ci" class="meta-chip">{{ chip }}</span>
+        </div>
       </div>
       <div class="seg-actions">
         <button class="small ghost" @click="openEdit">{{ t('receive.edit') }}</button>
@@ -300,6 +336,21 @@ onBeforeUnmount(() => {
   color: var(--accent);
   text-transform: uppercase;
   margin-bottom: 0.25rem;
+}
+
+.msg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+}
+
+.meta-chip {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .seg-actions {

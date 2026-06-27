@@ -1,8 +1,6 @@
 /**
  * sync-version.mjs
- *
  * 从 version.json 读取版本号，同步到 package.json、Cargo.toml、tauri.conf.json。
- * 用法：node scripts/sync-version.mjs
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';

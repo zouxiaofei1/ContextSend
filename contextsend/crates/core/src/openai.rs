@@ -134,6 +134,7 @@ mod tests {
                     },
                 ]),
                 name: None,
+                metadata: None,
             }],
         };
         let json = export_openai_json(&convo).unwrap();

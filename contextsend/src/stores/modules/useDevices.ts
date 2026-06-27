@@ -6,14 +6,6 @@ import type { Device } from '../types'
 
 /** 持久化的设备记录（不含运行时的 `online` 状态——恢复时一律先视为离线）。 */
 type StoredDevice = Pick<Device, 'id' | 'name' | 'os' | 'ip' | 'lastSync'>
-
-/**
- * 设备发现模块：维护设备列表快照。
- *
- * 与早期实现的区别：
- * - **离线不删除**：`deviceLost` 改为标记离线（沉底显示），并跨重启记住已知设备；
- * - **上次同步时间**：成功推送/接收后记录时间戳，按设备 uuid 持久化到 `devices.json`。
- */
 export function useDevices() {
   const devices = ref<Device[]>([])
   const store = createPersistentStore(STORE_FILE.DEVICES)
@@ -78,11 +70,6 @@ export function useDevices() {
       persist()
     }
   }
-
-  /**
-   * 忘记某设备：从名册移除并落盘（清掉持久化的 lastSync 等记录）。
-   * 仅对离线设备有意义——在线设备会被发现事件/快照立即重新加入。
-   */
   function forgetDevice(id: string): void {
     devices.value = devices.value.filter((d) => d.id !== id)
     persist()

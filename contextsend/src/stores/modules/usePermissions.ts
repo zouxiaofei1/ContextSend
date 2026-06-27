@@ -2,11 +2,6 @@ import { ref } from 'vue'
 import { STORE_FILE, STORE_KEY } from '../../constants'
 import { createPersistentStore } from '../../utils/tauriStore'
 import type { PermissionLevel } from '../types'
-
-/**
- * 设备权限模块：各设备的权限等级（本地、非对称），按 device uuid 索引，
- * 单独持久化到磁盘 JSON（`permissions.json`）。未记录的设备默认 Level 0（陌生人）。
- */
 export function usePermissions() {
   const permissions = ref<Record<string, PermissionLevel>>({})
   const store = createPersistentStore(STORE_FILE.PERMISSIONS)

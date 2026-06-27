@@ -142,8 +142,6 @@ const ICONS: Record<ToastType, string> = {
   opacity: 0;
   transform: translateX(8px) scale(0.98);
 }
-/* 离开时脱离布局，使其余 toast 通过 move 平滑上移补位；
-   保持 left/right 约束而非 width:100%（避免容器宽度变化时文字重排） */
 .toast-leave-active {
   position: absolute;
   left: 0;

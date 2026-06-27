@@ -1,12 +1,6 @@
 <script setup lang="ts">
 /**
  * 可复用的快捷键录制输入框。
- *
- * 受控组件：显示由 `modelValue`（Tauri accelerator 字符串，如 `CmdOrCtrl+Shift+C`）驱动，
- * 自身不持有状态。点击进入录制态，按下「至少一个修饰键 + 一个主键」的组合即触发
- * `update:modelValue`；是否真正生效由父级决定（父级可能因热键被占用而拒绝并回滚）。
- *
- * 仅负责「采集 + 规范化 + 展示」，不关心注册逻辑，故可复用于任意全局/局部快捷键设置项。
  */
 import { computed, ref } from 'vue'
 

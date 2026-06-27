@@ -30,15 +30,6 @@ export function useAdapters() {
   ): Promise<{ matched: boolean; app: string | null; score: number; conversation: Conversation }> {
     return await invoke(IPC.MATCH_CONTEXT, { snippet })
   }
-
-  /**
-   * 把一段对话导入到本机指定的 Chat AI 应用（写入其存储，使其出现新会话标签页）。
-   * 返回是否导入成功，便于调用方在失败时回退（如落入收件箱兜底）。
-   *
-   * - Jan：写文件，需切回 Jan 窗口（或重启）才刷新。
-   * - ChatBox：经 CDP 注入并自动刷新侧栏；需 ChatBox 已带
-   *   `--remote-debugging-port=9222` 启动，否则后端返回提示错误。
-   */
   async function importToApp(conversation: Conversation, appName: string): Promise<boolean> {
     try {
       await invoke<{ app: string; threadId: string }>(IPC.IMPORT_TO_APP, {
