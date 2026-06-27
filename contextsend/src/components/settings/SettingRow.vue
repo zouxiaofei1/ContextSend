@@ -1,9 +1,17 @@
 <script setup lang="ts">
-defineProps<{ label: string }>()
+defineProps<{ label: string; clickable?: boolean }>()
+const emit = defineEmits<{ click: [] }>()
 </script>
 
 <template>
-  <div class="setting-row">
+  <div
+    class="setting-row"
+    :class="{ 'setting-row--clickable': clickable }"
+    :role="clickable ? 'button' : undefined"
+    :tabindex="clickable ? 0 : undefined"
+    @click="clickable && emit('click')"
+    @keyup.enter="clickable && emit('click')"
+  >
     <div class="setting-row__label">
       <slot name="label">
         <span>{{ label }}</span>
@@ -22,6 +30,18 @@ defineProps<{ label: string }>()
   align-items: center;
   padding: 0.7rem 0;
   border-bottom: 1px solid var(--border);
+}
+
+.setting-row--clickable {
+  cursor: pointer;
+  margin: 0 -0.5rem;
+  padding: 0.7rem 0.5rem;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+
+.setting-row--clickable:hover {
+  background: var(--bg-secondary);
 }
 
 .setting-row:last-child {

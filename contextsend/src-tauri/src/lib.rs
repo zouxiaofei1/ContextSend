@@ -75,6 +75,9 @@ pub fn run() {
 
             migrate_legacy_data(app, &dir);
 
+            // 载入适配器用户配置（数据目录 / 端口覆盖），供 cs_adapters 读取。
+            cs_adapters::config::init(dir.join("adapters.json"));
+
             let identity_path = dir.join("identity.json");
             let identity = DeviceIdentity::load_or_create(&identity_path)?;
             log::info!(
@@ -171,6 +174,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::get_data_dir,
+            commands::list_adapters,
+            commands::set_adapter_config,
             commands::get_self_identity,
             commands::rename_self,
             commands::list_devices,

@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { TAB_RECEIVE, TAB_DEVICES, TAB_SETTINGS } from '../constants'
-import iconReceive from '../assets/icon-receive.svg?raw'
-import iconDevices from '../assets/icon-devices.svg?raw'
-import iconSettings from '../assets/icon-settings.svg?raw'
+import { useNavItems } from '../composables/useNavItems'
 
 defineProps<{
   activeTab: string
@@ -13,13 +9,7 @@ const emit = defineEmits<{
   select: [tab: string]
 }>()
 
-const { t } = useI18n()
-
-const navItems = [
-  { id: TAB_DEVICES, icon: iconDevices, label: t('sidebar.devices') },
-  { id: TAB_RECEIVE, icon: iconReceive, label: t('sidebar.receive') },
-  { id: TAB_SETTINGS, icon: iconSettings, label: t('sidebar.settings') },
-]
+const { navItems } = useNavItems()
 </script>
 
 <template>

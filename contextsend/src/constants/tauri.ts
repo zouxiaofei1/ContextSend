@@ -5,6 +5,8 @@
 export const IPC = {
   GET_APP_INFO: 'get_app_info',
   GET_DATA_DIR: 'get_data_dir',
+  LIST_ADAPTERS: 'list_adapters',
+  SET_ADAPTER_CONFIG: 'set_adapter_config',
   GET_SELF_IDENTITY: 'get_self_identity',
   LIST_DEVICES: 'list_devices',
   RENAME_SELF: 'rename_self',

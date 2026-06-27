@@ -1,4 +1,4 @@
-import type { Locale } from '../i18n'
+import type { Locale, LangPreference } from '../i18n'
 
 // ---- 默认值（与 loadSettings 兜底 return 保持一致） ----
 
@@ -20,6 +20,8 @@ export const LEGACY_ACCENT_TO_THEME: Record<string, string> = {
 }
 
 export const DEFAULT_LOCALE: Locale = 'zh-CN'
+/** 默认语言偏好：跟随系统。 */
+export const DEFAULT_LANG_PREFERENCE: LangPreference = 'system'
 export const DEFAULT_MINIMIZE_TO_TRAY = true
 export const DEFAULT_AUTO_START = false
 export const DEFAULT_SHOW_ADVANCED = false

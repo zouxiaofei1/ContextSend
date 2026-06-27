@@ -22,7 +22,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use cs_core::{ChatMessage, ContentPart, Conversation, MessageContent, Role};
 
-use crate::{Adapter, AdapterError};
+use crate::{config, Adapter, AdapterError, AdapterField};
 
 /// Jan AI 适配器。
 pub struct JanAdapter;
@@ -33,9 +33,13 @@ impl JanAdapter {
         dirs::data_dir().map(|d| d.join("Jan"))
     }
 
-    /// Jan 的数据目录（`data_folder`）。优先读取 `settings.json` 的 `data_folder`，
-    /// 回退到默认 `<app_data>/data`，与 Jan 的 `resolve_jan_data_folder` 行为一致。
+    /// Jan 的数据目录（`data_folder`）。用户覆盖优先；否则读取 `settings.json` 的
+    /// `data_folder`，回退到默认 `<app_data>/data`，与 Jan 的 `resolve_jan_data_folder`
+    /// 行为一致。
     fn data_folder() -> Option<PathBuf> {
+        if let Some(d) = config::get("jan").data_dir.filter(|s| !s.is_empty()) {
+            return Some(PathBuf::from(d));
+        }
         let app_data = Self::app_data_dir()?;
         let settings = app_data.join("settings.json");
         if let Ok(content) = fs::read_to_string(&settings) {
@@ -133,6 +137,15 @@ fn content_to_text(content: &serde_json::Value) -> String {
 impl Adapter for JanAdapter {
     fn app_name(&self) -> &'static str {
         "Jan"
+    }
+
+    fn fields(&self) -> &'static [AdapterField] {
+        &[AdapterField::DataDir]
+    }
+
+    fn configured_data_dir(&self) -> Option<PathBuf> {
+        // 设置页展示 / 编辑的是 Jan 的 data_folder（threads 的父目录）。
+        Self::data_folder()
     }
 
     fn data_dir(&self) -> Option<PathBuf> {

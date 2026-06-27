@@ -12,6 +12,26 @@ export interface AppInfo {
   buildNumber: number
 }
 
+/** 适配器可配置字段（与 Rust `AdapterField` 对齐，决定子页展示哪些项）。 */
+export type AdapterField = 'dataDir' | 'installDir' | 'port'
+
+/** 与 Rust 端 `cs_adapters::AdapterInfo` 对应：适配器探测状态 + 当前生效配置。 */
+export interface AdapterInfo {
+  name: string
+  installed: boolean
+  fields: AdapterField[]
+  dataDir: string | null
+  installDir: string | null
+  port: number | null
+}
+
+/** 适配器配置覆盖（写入 `set_adapter_config`；字段省略 / null 表示沿用默认）。 */
+export interface AdapterConfig {
+  dataDir?: string | null
+  installDir?: string | null
+  port?: number | null
+}
+
 /** 本机身份。 */
 export interface SelfIdentity {
   uuid: string

@@ -156,5 +156,7 @@ export const useAppStore = defineStore('app', () => {
     exportOpenai: adapters.exportOpenai,
     matchContext: adapters.matchContext,
     importToApp: adapters.importToApp,
+    listAdapters: adapters.listAdapters,
+    setAdapterConfig: adapters.setAdapterConfig,
   }
 })

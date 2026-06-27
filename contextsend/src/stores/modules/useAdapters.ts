@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { IPC, ADAPTER_CHATBOX } from '../../constants'
 import { translate as t } from '../../i18n'
 import { useToastStore } from '../toast'
-import type { Conversation } from '../types'
+import type { Conversation, AdapterInfo, AdapterConfig } from '../types'
 
 /**
  * 适配器导入 / 导出模块：OpenAI Compatible JSON 互转，上下文片段匹配，
@@ -54,5 +54,15 @@ export function useAdapters() {
     }
   }
 
-  return { importOpenai, exportOpenai, matchContext, importToApp }
+  /** 列出所有内置适配器的探测状态与当前配置（供「设置 → 适配器」页）。 */
+  async function listAdapters(): Promise<AdapterInfo[]> {
+    return await invoke<AdapterInfo[]>(IPC.LIST_ADAPTERS)
+  }
+
+  /** 写入某适配器的配置覆盖（数据目录 / 安装目录 / 端口）。 */
+  async function setAdapterConfig(name: string, config: AdapterConfig): Promise<void> {
+    await invoke(IPC.SET_ADAPTER_CONFIG, { name, config })
+  }
+
+  return { importOpenai, exportOpenai, matchContext, importToApp, listAdapters, setAdapterConfig }
 }

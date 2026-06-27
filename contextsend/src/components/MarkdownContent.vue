@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { renderMarkdown, sanitizeSvg } from '../composables/useMarkdown'
 import { resolveLang, fallbackIconSvg } from '../composables/useLangIcon'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 /** 超过此行数的代码块默认折叠。 */
 const FOLD_LINES = 24
@@ -234,6 +234,38 @@ function enhance(): void {
   })
 }
 
+/**
+ * Re-apply i18n text to already-enhanced code blocks when locale changes.
+ * Only touches text content of known button classes; does not recreate DOM.
+ */
+function refreshI18n(): void {
+  const el = root.value
+  if (!el) return
+  el.querySelectorAll<HTMLElement>('pre.code-block[data-enhanced]').forEach((pre) => {
+    // Copy button: always safe to reset to "Copy" text; if a copy timer is
+    // active, it will re-apply with the new locale on next tick.
+    const copyBtn = pre.querySelector<HTMLElement>('.code-copy')
+    if (copyBtn) copyBtn.textContent = t('receive.copyCode')
+
+    // Fold/collapse button: update title and aria-label (chevron is locale-independent)
+    const foldBtn = pre.querySelector<HTMLElement>('.code-fold:not(.code-preview-toggle)')
+    if (foldBtn) {
+      foldBtn.title = t('receive.toggleFold')
+      foldBtn.setAttribute('aria-label', t('receive.toggleFold'))
+    }
+
+    // SVG preview/source toggle: read current view state from DOM
+    const toggleBtn = pre.querySelector<HTMLElement>('.code-preview-toggle')
+    if (toggleBtn) {
+      const area = pre.querySelector<HTMLElement>('.code-area')
+      const showSource = area && area.style.display !== 'none'
+      toggleBtn.textContent = showSource
+        ? t('receive.preview')
+        : t('receive.viewSource')
+    }
+  })
+}
+
 watch(
   parts,
   () => {
@@ -241,6 +273,11 @@ watch(
   },
   { immediate: true },
 )
+
+// Re-apply i18n text on already-enhanced DOM nodes when locale switches
+watch(locale, () => {
+  refreshI18n()
+})
 
 onBeforeUnmount(() => {
   timers.forEach(clearTimeout)

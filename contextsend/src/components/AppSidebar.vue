@@ -2,10 +2,7 @@
 import { ref } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useI18n } from 'vue-i18n'
-import { TAB_RECEIVE, TAB_DEVICES, TAB_SETTINGS } from '../constants'
-import iconReceive from '../assets/icon-receive.svg?raw'
-import iconDevices from '../assets/icon-devices.svg?raw'
-import iconSettings from '../assets/icon-settings.svg?raw'
+import { useNavItems } from '../composables/useNavItems'
 import appIcon from '../assets/app-icon.png'
 
 const props = defineProps<{
@@ -20,16 +17,11 @@ const emit = defineEmits<{
 
 const app = useAppStore()
 const { t } = useI18n()
-
-const navItems = [
-  { id: TAB_DEVICES, icon: iconDevices, label: t('sidebar.devices') },
-  { id: TAB_RECEIVE, icon: iconReceive, label: t('sidebar.receive') },
-  { id: TAB_SETTINGS, icon: iconSettings, label: t('sidebar.settings') },
-]
+const { navItems } = useNavItems()
 
 // 键盘上下键导航
 const navRefs = ref<(HTMLElement | null)[]>([])
-const focusedIndex = ref(navItems.findIndex((item) => item.id === props.activeTab))
+const focusedIndex = ref(navItems.value.findIndex((item) => item.id === props.activeTab))
 
 function onNavFocus(index: number) {
   focusedIndex.value = index
@@ -38,12 +30,12 @@ function onNavFocus(index: number) {
 function onNavKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown') {
     e.preventDefault()
-    const next = (focusedIndex.value + 1) % navItems.length
+    const next = (focusedIndex.value + 1) % navItems.value.length
     focusedIndex.value = next
     navRefs.value[next]?.focus()
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
-    const prev = (focusedIndex.value - 1 + navItems.length) % navItems.length
+    const prev = (focusedIndex.value - 1 + navItems.value.length) % navItems.value.length
     focusedIndex.value = prev
     navRefs.value[prev]?.focus()
   }

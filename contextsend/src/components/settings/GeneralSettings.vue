@@ -5,8 +5,7 @@ import { useAppStore } from '../../stores/app'
 import { useToastStore } from '../../stores/toast'
 import { useSettingsStore } from '../../stores/settings'
 import { THEMES } from '../../constants'
-import { SUPPORTED_LOCALES } from '../../i18n'
-import type { Locale } from '../../i18n'
+import { LOCALE_NATIVE_NAME } from '../../i18n'
 import { generateRandomName } from '../../utils/nameGenerator'
 import { validateName } from '../../utils/nameValidation'
 import SettingsSection from './SettingsSection.vue'
@@ -17,7 +16,9 @@ import SettingSelect from './SettingSelect.vue'
 const app = useAppStore()
 const toast = useToastStore()
 const settings = useSettingsStore()
-const { t, locale } = useI18n()
+const { t } = useI18n()
+
+const emit = defineEmits<{ openLanguage: [] }>()
 
 const renameText = ref(app.identity?.name ?? '')
 
@@ -64,10 +65,12 @@ function onRandomName(): void {
   void applyRename(name)
 }
 
-function onLocaleChange(loc: Locale): void {
-  locale.value = loc
-  settings.setLocale(loc)
-}
+/** 当前语言偏好的展示名：跟随系统显示对应文案，否则显示母语名称。 */
+const currentLanguageLabel = computed(() =>
+  settings.langPreference === 'system'
+    ? t('settings.languageFollowSystem')
+    : LOCALE_NATIVE_NAME[settings.langPreference],
+)
 
 const themeOptions = computed(() =>
   THEMES.map((th) => ({
@@ -75,11 +78,6 @@ const themeOptions = computed(() =>
     label: th.nameEn,
   })),
 )
-
-const localeOptions = SUPPORTED_LOCALES.map((l) => ({
-  value: l,
-  label: l === 'zh-CN' ? '简体中文' : 'English',
-}))
 </script>
 
 <template>
@@ -98,13 +96,19 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
       />
     </SettingRow>
 
-    <!-- 语言切换 -->
-    <SettingRow :label="t('settings.language')">
-      <SettingSelect
-        :model-value="settings.locale"
-        :options="localeOptions"
-        @update:model-value="onLocaleChange($event)"
-      />
+    <!-- 语言切换：进入独立的语言选择页 -->
+    <SettingRow :label="t('settings.language')" clickable @click="emit('openLanguage')">
+      <span class="muted current-lang">{{ currentLanguageLabel }}</span>
+      <svg class="chevron" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path
+          d="M9 6l6 6-6 6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
     </SettingRow>
 
     <!-- 关闭时最小化到托盘 -->
@@ -155,6 +159,15 @@ const localeOptions = SUPPORTED_LOCALES.map((l) => ({
 <style scoped>
 .theme-hint {
   font-size: 0.75rem;
+}
+
+.current-lang {
+  font-size: 0.9rem;
+}
+
+.chevron {
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .rename-control {

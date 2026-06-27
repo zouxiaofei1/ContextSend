@@ -18,6 +18,7 @@
     "autostart:default",
     "store:default",
     "dialog:allow-save",
+    "dialog:allow-open",
     {
       "identifier": "fs:allow-read-dir",
       "allow": [

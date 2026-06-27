@@ -28,10 +28,18 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 
 use crate::AdapterError;
 
-/// CDP 调试端口（与启动 ChatBox 时的 `--remote-debugging-port` 一致）。
-const DEBUG_PORT: u16 = 9222;
+/// CDP 调试端口默认值（与启动 ChatBox 时的 `--remote-debugging-port` 一致）。
+/// 可被用户在「设置 → 适配器 → ChatBox」里覆盖。
+pub(crate) const DEFAULT_DEBUG_PORT: u16 = 9222;
 /// DevTools HTTP/WS 监听地址。
 const DEBUG_HOST: &str = "127.0.0.1";
+
+/// 当前生效的 CDP 调试端口：用户覆盖优先，否则 [`DEFAULT_DEBUG_PORT`]。
+fn debug_port() -> u16 {
+    crate::config::get("chatbox")
+        .port
+        .unwrap_or(DEFAULT_DEBUG_PORT)
+}
 
 /// 把 cs-core 的 [`Role`] 映射为 ChatBox/OpenAI 的角色字符串。
 fn role_str(role: Role) -> &'static str {
@@ -96,13 +104,14 @@ fn content_length(head: &str) -> Option<usize> {
 /// `read_to_end`（会一直阻塞到超时）。改为读到响应头后按 `Content-Length` 收满
 /// body 即停；整体加超时兜底。
 async fn devtools_get(path: &str) -> Result<String, AdapterError> {
-    let addr = format!("{DEBUG_HOST}:{DEBUG_PORT}");
+    let port = debug_port();
+    let addr = format!("{DEBUG_HOST}:{port}");
     let fut = async {
         let mut stream = TcpStream::connect(&addr).await.map_err(|e| {
-            AdapterError::ChatBox(format!("连接 ChatBox 调试端口 {DEBUG_PORT} 失败: {e}"))
+            AdapterError::ChatBox(format!("连接 ChatBox 调试端口 {port} 失败: {e}"))
         })?;
         let req = format!(
-            "GET {path} HTTP/1.1\r\nHost: {DEBUG_HOST}:{DEBUG_PORT}\r\nAccept: application/json\r\n\r\n"
+            "GET {path} HTTP/1.1\r\nHost: {DEBUG_HOST}:{port}\r\nAccept: application/json\r\n\r\n"
         );
         stream.write_all(req.as_bytes()).await?;
 
@@ -273,15 +282,16 @@ fn build_import_script(session_id: &str, payload: &Value) -> String {
 /// 前置条件：ChatBox 已带 `--remote-debugging-port=9222` 启动。端口不可达时返回
 /// 明确错误，提示用户用带该 flag 的方式启动 ChatBox（单实例锁下需先完全退出再启动）。
 pub async fn import_to_chatbox(convo: &Conversation) -> Result<String, AdapterError> {
+    let port = debug_port();
     log::debug!(
-        "ChatBox 导入开始: messages={} (CDP 端口 {DEBUG_PORT})",
+        "ChatBox 导入开始: messages={} (CDP 端口 {port})",
         convo.messages.len()
     );
     if !debugger_ready().await {
-        log::warn!("ChatBox 调试端口 {DEBUG_PORT} 不可达，导入中止");
+        log::warn!("ChatBox 调试端口 {port} 不可达，导入中止");
         return Err(AdapterError::ChatBox(format!(
-            "ChatBox 调试端口 {DEBUG_PORT} 不可达。请先完全退出 ChatBox，再以 \
-             `--remote-debugging-port={DEBUG_PORT}` 启动后重试。"
+            "ChatBox 调试端口 {port} 不可达。请先完全退出 ChatBox，再以 \
+             `--remote-debugging-port={port}` 启动后重试。"
         )));
     }
 
@@ -441,11 +451,12 @@ fn sessions_json_to_conversations(value: &Value) -> Vec<Conversation> {
 /// 前置条件同导入：ChatBox 已带 `--remote-debugging-port=9222` 启动。端口不可达时
 /// 返回 [`AdapterError::ChatBox`]，由调用方决定是否忽略（匹配遍历会跳过失败的适配器）。
 pub async fn list_chatbox_conversations() -> Result<Vec<Conversation>, AdapterError> {
+    let port = debug_port();
     if !debugger_ready().await {
-        log::debug!("ChatBox 调试端口 {DEBUG_PORT} 不可达，跳过读取");
+        log::debug!("ChatBox 调试端口 {port} 不可达，跳过读取");
         return Err(AdapterError::ChatBox(format!(
-            "ChatBox 调试端口 {DEBUG_PORT} 不可达（读取需 ChatBox 带 \
-             `--remote-debugging-port={DEBUG_PORT}` 运行）。"
+            "ChatBox 调试端口 {port} 不可达（读取需 ChatBox 带 \
+             `--remote-debugging-port={port}` 运行）。"
         )));
     }
     let ws_url = page_target_ws().await?;

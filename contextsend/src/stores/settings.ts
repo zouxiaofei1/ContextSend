@@ -1,16 +1,17 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart'
-import type { Locale } from '../i18n'
+import type { Locale, LangPreference } from '../i18n'
+import { detectSystemLocale } from '../i18n'
 import {
   THEMES,
   buildThemeVars,
   LS_SETTINGS,
   DEFAULT_THEME_ID,
   LEGACY_ACCENT_TO_THEME,
-  DEFAULT_LOCALE,
+  DEFAULT_LANG_PREFERENCE,
   DEFAULT_MINIMIZE_TO_TRAY,
   DEFAULT_AUTO_START,
   DEFAULT_SHOW_ADVANCED,
@@ -33,7 +34,7 @@ import type { RetentionValue } from '../constants'
 
 interface SettingsData {
   themeId: string
-  locale: Locale
+  langPreference: LangPreference
   minimizeToTray: boolean
   autoStart: boolean
   showAdvanced: boolean
@@ -50,10 +51,14 @@ function loadSettings(): SettingsData {
   try {
     const raw = localStorage.getItem(LS_SETTINGS)
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<SettingsData> & { accentColor?: string }
+      const parsed = JSON.parse(raw) as Partial<SettingsData> & {
+        accentColor?: string
+        /** 旧版字段：直接持久化的实际 locale，迁移为 langPreference。 */
+        locale?: string
+      }
       return {
         themeId: resolveThemeId(parsed.themeId, parsed.accentColor),
-        locale: parsed.locale === 'en-US' ? 'en-US' : DEFAULT_LOCALE,
+        langPreference: resolveLangPreference(parsed),
         minimizeToTray: parsed.minimizeToTray !== false,
         autoStart: parsed.autoStart === true,
         showAdvanced: parsed.showAdvanced === true,
@@ -82,7 +87,7 @@ function loadSettings(): SettingsData {
   }
   return {
     themeId: DEFAULT_THEME_ID,
-    locale: DEFAULT_LOCALE,
+    langPreference: DEFAULT_LANG_PREFERENCE,
     minimizeToTray: DEFAULT_MINIMIZE_TO_TRAY,
     autoStart: DEFAULT_AUTO_START,
     showAdvanced: DEFAULT_SHOW_ADVANCED,
@@ -98,6 +103,19 @@ function loadSettings(): SettingsData {
 
 function isRetentionValue(v: unknown): v is RetentionValue {
   return v === '6h' || v === '1d' || v === '7d' || v === '30d' || v === 'unlimited'
+}
+
+/**
+ * 解析持久化的语言偏好：优先用新版 langPreference；否则迁移旧版 locale 字段
+ * （已选具体语言的老用户保留其选择）；都无效时回退默认（跟随系统）。
+ */
+function resolveLangPreference(parsed: {
+  langPreference?: LangPreference
+  locale?: string
+}): LangPreference {
+  const pref = parsed.langPreference ?? parsed.locale
+  if (pref === 'system' || pref === 'zh-CN' || pref === 'en-US') return pref
+  return DEFAULT_LANG_PREFERENCE
 }
 
 /**
@@ -128,7 +146,16 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme()
   })
 
-  const locale = ref<Locale>(initial.locale)
+  const langPreference = ref<LangPreference>(initial.langPreference)
+  // 系统语言：偏好为 `system` 时实际生效的 locale，随系统语言变化实时跟随。
+  const systemLocale = ref<Locale>(detectSystemLocale())
+  window.addEventListener('languagechange', () => {
+    systemLocale.value = detectSystemLocale()
+  })
+  /** 实际生效的语言：偏好为 `system` 时派生自系统语言，否则即偏好本身。 */
+  const locale = computed<Locale>(() =>
+    langPreference.value === 'system' ? systemLocale.value : langPreference.value,
+  )
   const minimizeToTray = ref<boolean>(initial.minimizeToTray)
   const autoStart = ref<boolean>(initial.autoStart)
   const showAdvanced = ref<boolean>(initial.showAdvanced)
@@ -180,8 +207,8 @@ export const useSettingsStore = defineStore('settings', () => {
     themeId.value = id
   }
 
-  function setLocale(loc: Locale): void {
-    locale.value = loc
+  function setLangPreference(pref: LangPreference): void {
+    langPreference.value = pref
   }
 
   function toggleMinimizeToTray(): void {
@@ -269,7 +296,7 @@ export const useSettingsStore = defineStore('settings', () => {
   watch(
     [
       themeId,
-      locale,
+      langPreference,
       minimizeToTray,
       autoStart,
       showAdvanced,
@@ -284,7 +311,7 @@ export const useSettingsStore = defineStore('settings', () => {
     ([tid, l, m, s, adv, atop, sm, port, timeout, shortcut, retention, maxCount]) => {
       persist({
         themeId: tid,
-        locale: l,
+        langPreference: l,
         minimizeToTray: m,
         autoStart: s,
         showAdvanced: adv,
@@ -309,6 +336,7 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     themeId,
     colorScheme,
+    langPreference,
     locale,
     minimizeToTray,
     autoStart,
@@ -322,7 +350,7 @@ export const useSettingsStore = defineStore('settings', () => {
     maxConversationCount,
     applyTheme,
     setThemeId,
-    setLocale,
+    setLangPreference,
     toggleMinimizeToTray,
     toggleAutoStart,
     toggleShowAdvanced,

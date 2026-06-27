@@ -61,6 +61,21 @@ pub fn get_app_info() -> AppInfo {
     }
 }
 
+/// 列出所有内置适配器的展示信息（探测状态 + 当前配置），供「设置 → 适配器」页渲染。
+#[tauri::command]
+pub fn list_adapters() -> Vec<cs_adapters::AdapterInfo> {
+    cs_adapters::list_adapters()
+}
+
+/// 写入某适配器的配置覆盖（数据目录 / 安装目录 / 端口）并落盘。
+#[tauri::command]
+pub fn set_adapter_config(
+    name: String,
+    config: cs_adapters::AdapterOverride,
+) -> Result<(), String> {
+    cs_adapters::set_adapter_override(&name, config).map_err(|e| e.to_string())
+}
+
 /// 本机身份视图。
 #[derive(Debug, Serialize)]
 pub struct SelfIdentity {
