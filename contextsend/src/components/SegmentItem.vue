@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 单段对话卡片：头部（标题/来源/计数）+ 展开后的消息体 + 操作区。
-// 操作区为「编辑 / 复制 / 删除 / 更多」，更多下拉含设为推送源、导入到 Jan / ChatBox。
+// 操作区为「编辑 / 复制 / 删除 / 更多」，更多下拉含导入到 Jan / ChatBox。
 // 右键卡片弹出导出菜单：OpenAI JSON / Markdown / HTML / PDF。
 // - 复制：拼成「title:… / role:content …」的纯文本。
 // - 编辑：弹出悬浮窗，Title 与每条消息各一个输入框，保存回写该段对话。
@@ -27,8 +27,6 @@ const menuWrap = ref<HTMLElement | null>(null)
 
 // 右键导出菜单：屏幕坐标定位，Teleport 到 body。
 const ctxMenu = ref<{ x: number; y: number } | null>(null)
-
-const isPushSource = computed(() => app.selectedSegmentId === props.segment.id)
 
 const segTitle = computed(
   () => props.segment.conversation.title || props.segment.conversation.model || t('receive.title'),
@@ -113,11 +111,6 @@ function remove(): void {
   app.removeSegment(props.segment.id)
 }
 
-function setPushSource(): void {
-  app.selectSegment(props.segment.id)
-  showMenu.value = false
-}
-
 function importJan(): void {
   app.importToApp(props.segment.conversation, ADAPTER_JAN)
   showMenu.value = false
@@ -185,7 +178,6 @@ onBeforeUnmount(() => {
         {{ t('receive.count', { count: segment.conversation.messages.length }) }}
       </span>
       <span v-if="unread" class="dot-new" />
-      <span v-else-if="isPushSource" class="push-badge">{{ t('receive.pushSource') }}</span>
     </div>
 
     <div v-if="expanded" class="seg-body">
@@ -200,7 +192,6 @@ onBeforeUnmount(() => {
         <div ref="menuWrap" class="more-wrap">
           <button class="small ghost" @click="showMenu = !showMenu">{{ t('receive.more') }} ▾</button>
           <div v-if="showMenu" class="more-menu">
-            <button class="menu-item" @click="setPushSource">{{ t('receive.setPushSource') }}</button>
             <button class="menu-item" @click="importJan">{{ t('receive.importToJan') }}</button>
             <button class="menu-item" @click="importChatBox">
               {{ t('receive.importToChatBox') }}
@@ -301,15 +292,6 @@ onBeforeUnmount(() => {
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  flex-shrink: 0;
-}
-
-.push-badge {
-  font-size: 0.65rem;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 0.05rem 0.3rem;
   flex-shrink: 0;
 }
 

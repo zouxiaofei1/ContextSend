@@ -13,9 +13,14 @@ import ToastHost from './components/ToastHost.vue'
 import ReceivePanel from './components/ReceivePanel.vue'
 import DevicePanel from './components/DevicePanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import IncomingRequestView from './components/IncomingRequestView.vue'
 
 const app = useAppStore()
 const { isPortrait, isCompact } = useLayout()
+
+// Level 0 入站对话请求：以独立页面（盖住 tab 栏）接管整窗；Level 2 的
+// 配对码比对接收仍走 DevicePanel 内的弹窗。
+const showIncoming = computed(() => !!app.incoming && !app.incoming.showPin)
 
 // 用户手动收起侧边栏（双击切换）；与窗口过窄触发的自动紧凑叠加生效
 const manualCollapsed = ref(false)
@@ -63,8 +68,15 @@ function onToggleSidebar(): void {
     <TitleBar :portrait="isPortrait" />
     <ToastHost />
 
+    <!-- Level 0 入站对话请求：独立页面接管（盖住侧栏 / 底部 Tab 栏） -->
+    <div v-if="showIncoming" class="app-layout">
+      <main class="app-main">
+        <IncomingRequestView />
+      </main>
+    </div>
+
     <!-- 横屏布局：左侧边栏 + 右侧内容 -->
-    <div v-if="!isPortrait" class="app-layout">
+    <div v-else-if="!isPortrait" class="app-layout">
       <AppSidebar
         :active-tab="activeTab"
         :compact="sidebarCompact"

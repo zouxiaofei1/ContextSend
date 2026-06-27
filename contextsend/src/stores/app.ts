@@ -100,13 +100,23 @@ export const useAppStore = defineStore('app', () => {
         case 'incomingPairing':
           pairing.handleIncomingPairing(p, permissions.permissionOf(p.peerUuid))
           break
-        case 'conversationReceived':
+        case 'conversationReceived': {
           devices.recordSync(p.fromUuid, Date.now())
-          segments.addSegment(p.fromName, p.conversation, false)
-          toast.info(
-            t('receive.received', { name: p.fromName, count: p.conversation.messages.length }),
-          )
+          // 接受时若选了导入目标则导入到该适配器；成功则不再入收件箱，
+          // 失败时回退落收件箱兜底（避免对话丢失）。未选目标默认落收件箱。
+          const dest = pairing.takeDestination(p.fromUuid)
+          if (dest) {
+            void adapters.importToApp(p.conversation, dest).then((ok) => {
+              if (!ok) segments.addSegment(p.fromName, p.conversation, false)
+            })
+          } else {
+            segments.addSegment(p.fromName, p.conversation, false)
+            toast.info(
+              t('receive.received', { name: p.fromName, count: p.conversation.messages.length }),
+            )
+          }
           break
+        }
         case 'failed':
           toast.error(t('toast.pairingFailed', { reason: p.reason }))
           break

@@ -119,32 +119,7 @@ async function onExport(): Promise<void> {
       </ul>
     </section>
 
-    <!-- 导入导出的折叠区 -->
-    <section class="card">
-      <button class="ghost section-toggle" @click="showImportExport = !showImportExport">
-        {{ showImportExport ? '▼' : '▶' }} {{ t('receive.sectionImportExport') }}
-      </button>
-
-      <template v-if="showImportExport">
-        <textarea
-          v-model="importText"
-          rows="4"
-          :placeholder="t('receive.importPlaceholder')"
-          style="margin-top: 0.5rem"
-        />
-        <div class="row">
-          <button @click="onImport">{{ t('receive.import') }}</button>
-          <button @click="onExport">{{ t('receive.export') }}</button>
-        </div>
-        <textarea
-          v-if="exportText"
-          :value="exportText"
-          rows="6"
-          readonly
-          style="margin-top: 0.5rem"
-        />
-      </template>
-    </section>
+  
   </div>
 </template>
 

@@ -28,6 +28,21 @@ export function usePairing(deps: {
   const outgoing = ref<OutgoingPairing | null>(null)
 
   /**
+   * 接受入站对话时选定的「导入目标」，按来源 uuid 暂存。对话正文在
+   * `accept_incoming` 之后才经 `conversationReceived` 到达，故先记下目标，
+   * 等正文到达时再由门面取出路由（导入到适配器 / 落收件箱）。
+   * 值为适配器名表示导入到该应用；缺省 / 空表示落收件箱。
+   */
+  const pendingDestinations = new Map<string, string>()
+
+  /** 取出并清除某来源的待导入目标（正文到达时调用）。 */
+  function takeDestination(uuid: string): string | undefined {
+    const dest = pendingDestinations.get(uuid)
+    pendingDestinations.delete(uuid)
+    return dest
+  }
+
+  /**
    * 按本机对该设备的权限等级（本地、非对称）处理入站推送：
    * Level -1 静默拒绝；Level 1 自动接收；Level 0/2 弹窗（Level 2 展示 PIN 比对）。
    */
@@ -108,14 +123,19 @@ export function usePairing(deps: {
     }
   }
 
-  /** 确认入站配对码一致后，接收对端对话。 */
-  async function acceptIncoming(): Promise<void> {
+  /**
+   * 确认入站配对后接收对端对话。`destination` 为适配器名时，记下该来源的
+   * 待导入目标，等正文到达再由门面导入；缺省则正文落收件箱。
+   */
+  async function acceptIncoming(destination?: string): Promise<void> {
     if (!incoming.value) return
-    const { pairingId } = incoming.value
-    incoming.value = null // 先关弹窗，避免请求失败时卡住遮罩。
+    const { pairingId, peerUuid } = incoming.value
+    if (destination) pendingDestinations.set(peerUuid, destination)
+    incoming.value = null // 先关页面，避免请求失败时卡住。
     try {
       await invoke(IPC.ACCEPT_INCOMING, { pairingId })
     } catch (e) {
+      pendingDestinations.delete(peerUuid)
       toast.error(t('toast.receiveFailed', { error: String(e) }))
     }
   }
@@ -140,5 +160,6 @@ export function usePairing(deps: {
     confirmAndPush,
     acceptIncoming,
     rejectIncoming,
+    takeDestination,
   }
 }

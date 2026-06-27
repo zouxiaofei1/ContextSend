@@ -147,8 +147,8 @@ function ctxForget(): void {
 
 <template>
   <div class="panel">
-    <section class="card">
-      <h2>{{ t('device.title') }} ({{ onlineCount }}/{{ app.devices.length }})</h2>
+   
+      <h3>{{ t('device.title') }}</h3>
       <ul v-if="app.devices.length" class="device-list">
         <li
           v-for="{ device: d, sync } in deviceRows"
@@ -187,12 +187,9 @@ function ctxForget(): void {
             <span v-else class="sync">{{ t('device.neverSynced') }}</span>
           </div>
 
-          <!-- L3：右 推送 + 权限按钮（本机不显示操作） -->
+          <!-- L3：权限按钮（本机不显示操作） -->
           <div v-if="d.id !== app.identity?.uuid" class="row row3">
             <span class="spacer" />
-            <button class="small" :disabled="app.permissionOf(d.id) === -1" @click="push(d)">
-              {{ t('device.push') }}
-            </button>
             <div class="more">
               <button
                 class="ghost small more-btn"
@@ -222,7 +219,7 @@ function ctxForget(): void {
         </li>
       </ul>
       <p v-else class="muted">{{ t('device.noDevices') }}</p>
-    </section>
+  
 
     <!-- 设备右键上下文菜单：定位到光标处，点击外部关闭 -->
     <Teleport to="body">
@@ -248,7 +245,7 @@ function ctxForget(): void {
 
     <!-- 配对码 / 确认弹窗（居中 + 灰色遮罩）：主动配对与入站配对二选一 -->
     <Teleport to="body">
-      <div v-if="app.outgoing || app.incoming" class="modal-overlay">
+      <div v-if="app.outgoing || (app.incoming && app.incoming.showPin)" class="modal-overlay">
         <!-- 主动配对 -->
         <section v-if="app.outgoing" class="card card--accent modal-card">
           <!-- 升级到 Level 2：展示配对码比对 -->
@@ -272,26 +269,14 @@ function ctxForget(): void {
           </template>
         </section>
 
-        <!-- 入站配对 -->
-        <section v-else-if="app.incoming" class="card card--accent modal-card">
-          <!-- Level 2：展示配对码比对 -->
-          <template v-if="app.incoming.showPin">
-            <h2>{{ t('device.fromRequest', { name: app.incoming.peerName }) }}</h2>
-            <p class="pin">{{ app.incoming.pin }}</p>
-            <div class="row">
-              <button @click="app.acceptIncoming()">{{ t('device.accept') }}</button>
-              <button class="ghost" @click="app.rejectIncoming()">{{ t('device.reject') }}</button>
-            </div>
-          </template>
-          <!-- Level 0 陌生人：按设备名确认接收，不展示配对码 -->
-          <template v-else>
-            <h2>{{ t('device.receiveConfirm', { name: app.incoming.peerName }) }}</h2>
-            <p class="muted">{{ t('device.receiveConfirmHint') }}</p>
-            <div class="row">
-              <button @click="app.acceptIncoming()">{{ t('device.receiveBtn') }}</button>
-              <button class="ghost" @click="app.rejectIncoming()">{{ t('device.reject') }}</button>
-            </div>
-          </template>
+        <!-- 入站配对（仅 Level 2：展示配对码比对；Level 0 走独立页面 IncomingRequestView） -->
+        <section v-else-if="app.incoming && app.incoming.showPin" class="card card--accent modal-card">
+          <h2>{{ t('device.fromRequest', { name: app.incoming.peerName }) }}</h2>
+          <p class="pin">{{ app.incoming.pin }}</p>
+          <div class="row">
+            <button @click="app.acceptIncoming()">{{ t('device.accept') }}</button>
+            <button class="ghost" @click="app.rejectIncoming()">{{ t('device.reject') }}</button>
+          </div>
         </section>
       </div>
     </Teleport>
@@ -303,6 +288,7 @@ function ctxForget(): void {
   flex: 1;
   padding: 1.5rem;
   overflow-y: auto;
+  user-select: none;
 }
 
 .card {

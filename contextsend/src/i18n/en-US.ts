@@ -77,7 +77,7 @@ export default {
     lastSeen: 'Last seen',
     neverConnected: 'Never connected',
     me: '(this device)',
-    noDevices: 'No devices found (ensure same LAN, waiting for discovery…)',
+    noDevices: 'Make sure the target device is on the same LAN.',
     pair: 'Pair & Push',
     push: 'Push',
     pushToDevice: 'Push to device',
@@ -85,7 +85,7 @@ export default {
     more: 'More',
     setPermission: 'Set Permission',
     pairingTitle: 'Pairing Code (verify with peer)',
-    pairingHint: 'Both sides must show the same code to prevent MITM attacks.',
+    pairingHint: 'Both sides must show the same code.',
     pairingConfirm: 'Match — Push Current Conversation',
     accept: 'Match — Accept',
     reject: 'Reject',
@@ -96,6 +96,11 @@ export default {
     receiveConfirm: 'Receive conversation from "{name}"?',
     receiveConfirmHint: 'This device wants to push a conversation to you.',
     receiveBtn: 'Accept',
+    receiveSubtitle: 'wants to send you a conversation',
+    receiveDetail: 'Details',
+    acceptBtn: 'Accept',
+    acceptToInbox: 'Inbox',
+    acceptToApp: 'Import to {app}',
     fromRequest: 'Pairing request from "{name}"',
     pushedSuccess: 'Conversation pushed',
     permission: {
@@ -156,7 +161,7 @@ export default {
       globalShortcut: 'Show/Hide window shortcut',
       shortcutUnset: 'Not set',
       shortcutRecording: 'Press shortcut…',
-      shortcutConflict: 'That shortcut is invalid or already in use, try another',
+      shortcutConflict: 'Shortcut is invalid or already in use',
       retention: 'Conversation Retention',
       retentionOptions: {
         '6h': '6 Hours',
@@ -184,9 +189,9 @@ export default {
     pushFailed: 'Push failed: {error}',
     rejectFailed: 'Reject failed: {error}',
     importAppSuccessChatBox:
-      'Written to {app}; the sidebar has refreshed — the new conversation is visible',
+      'Written to {app};',
     importAppSuccess:
-      'Written to {app}; switch back to the {app} window to see the new conversation',
+      'Written to {app};',
     importAppFailed: 'Import to {app} failed: {error}',
   },
 }

@@ -88,6 +88,7 @@ function back(): void {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  user-select: none;
 }
 
 .subpage {
