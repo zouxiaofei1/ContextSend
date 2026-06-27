@@ -441,6 +441,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem 0.5rem 0.75rem 0.9rem;
   border-right: 1px solid var(--border);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: inherit;
   line-height: 1.5;
 }
 .md-body :deep(.code-scroll) {
@@ -451,6 +452,7 @@ onBeforeUnmount(() => {
   display: block;
   white-space: pre;
   padding: 0.75rem 0.9rem;
+  font-size: inherit;
   line-height: 1.5;
 }
 .md-body :deep(code) {

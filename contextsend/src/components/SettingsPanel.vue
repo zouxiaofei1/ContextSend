@@ -8,7 +8,7 @@ import AboutSection from './settings/AboutSection.vue'
 import LanguageSettings from './settings/LanguageSettings.vue'
 import AdapterSettings from './settings/AdapterSettings.vue'
 import AdapterDetailSettings from './settings/AdapterDetailSettings.vue'
-import type { AdapterInfo } from '../stores/app'
+import type { AdapterInfo, AdapterConfig } from '../stores/app'
 
 const settings = useSettingsStore()
 const app = useAppStore()
@@ -29,8 +29,8 @@ async function reloadAdapters(): Promise<void> {
       selectedAdapter.value =
         adapters.value.find((a) => a.name === selectedAdapter.value?.name) ?? selectedAdapter.value
     }
-  } catch {
-    // 后端未就绪时忽略，下次进入设置再试。
+  } catch (e) {
+    console.warn('reloadAdapters 失败，下次进入设置再试:', e)
   }
 }
 
@@ -52,6 +52,22 @@ function openAdapter(name: string): void {
 function back(): void {
   transitionName.value = 'slide-back'
   subView.value = 'root'
+}
+
+/** 适配器配置保存后：乐观更新本地状态，避免依赖异步 reloadAdapters。 */
+function onAdapterSaved(config: AdapterConfig): void {
+  if (!selectedAdapter.value) return
+  // 直接修改 selectedAdapter，立即反映在 UI
+  if (config.dataDir !== undefined) selectedAdapter.value.dataDir = config.dataDir ?? null
+  if (config.installDir !== undefined) selectedAdapter.value.installDir = config.installDir ?? null
+  if (config.port !== undefined) selectedAdapter.value.port = config.port ?? null
+  // 同步更新 adapters 数组中对应的项
+  const idx = adapters.value.findIndex((a) => a.name === selectedAdapter.value!.name)
+  if (idx !== -1) {
+    if (config.dataDir !== undefined) adapters.value[idx].dataDir = config.dataDir ?? null
+    if (config.installDir !== undefined) adapters.value[idx].installDir = config.installDir ?? null
+    if (config.port !== undefined) adapters.value[idx].port = config.port ?? null
+  }
 }
 </script>
 
@@ -76,7 +92,7 @@ function back(): void {
         class="subpage"
         :adapter="selectedAdapter!"
         @back="back"
-        @saved="reloadAdapters"
+        @saved="onAdapterSaved"
       />
     </Transition>
   </div>

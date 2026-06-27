@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useAppStore } from '../stores/app'
 import type { Conversation, Device, PermissionLevel } from '../stores/app'
 import { useI18n } from 'vue-i18n'
+import TroubleshootingPanel from './TroubleshootingPanel.vue'
 
 const app = useAppStore()
 const { t, locale } = useI18n()
@@ -90,6 +91,12 @@ function levelMeta(level: PermissionLevel) {
 /** 当前展开「...」菜单的设备 id（null 表示无）。 */
 const openMenuId = ref<string | null>(null)
 
+/** 刷新按钮旋转动画状态 */
+const refreshing = ref(false)
+
+/** 是否显示疑难解答子页面 */
+const showTroubleshooting = ref(false)
+
 function toggleMenu(id: string): void {
   openMenuId.value = openMenuId.value === id ? null : id
 }
@@ -114,6 +121,14 @@ function chooseLevel(d: Device, level: PermissionLevel): void {
   } else {
     app.setPermission(d.id, level)
   }
+}
+
+/** 刷新设备列表：图标旋转 1 秒，不阻塞按钮。 */
+async function handleRefresh(): Promise<void> {
+  if (refreshing.value) return
+  refreshing.value = true
+  setTimeout(() => { refreshing.value = false }, 1000)
+  await app.refreshDevices()
 }
 
 /** 右键上下文菜单：目标设备 + 屏幕坐标（null 表示未打开）。 */
@@ -147,8 +162,33 @@ function ctxForget(): void {
 
 <template>
   <div class="panel">
-   
-      <h3>{{ t('device.title') }}</h3>
+    <!-- 疑难解答子页面 -->
+    <TroubleshootingPanel
+      v-if="showTroubleshooting"
+      @back="showTroubleshooting = false"
+    />
+
+    <!-- 设备列表视图 -->
+    <template v-else>
+      <div class="title-row">
+        <h3>{{ t('device.title') }}</h3>
+        <button
+          class="ghost small refresh-btn"
+          :class="{ spinning: refreshing }"
+          :title="t('device.refresh')"
+          @click="handleRefresh"
+        >
+          <svg class="refresh-icon" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 21C7.02944 21 3 16.9706 3 12C3 9.69494 3.86656 7.59227 5.29168 6L8 3M12 3C16.9706 3 21 7.02944 21 12C21 14.3051 20.1334 16.4077 18.7083 18L16 21M3 3H8M8 3V8M21 21H16M16 21V16"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
       <ul v-if="app.devices.length" class="device-list">
         <li
           v-for="{ device: d, sync } in deviceRows"
@@ -219,7 +259,13 @@ function ctxForget(): void {
         </li>
       </ul>
       <p v-else class="muted">{{ t('device.noDevices') }}</p>
-  
+
+      <!-- 空状态：疑难解答入口 -->
+      <p v-if="!app.devices.length" class="troubleshooting-link">
+        <button class="ghost" @click="showTroubleshooting = true">
+          {{ t('device.troubleshooting') }}
+        </button>
+      </p>
 
     <!-- 设备右键上下文菜单：定位到光标处，点击外部关闭 -->
     <Teleport to="body">
@@ -280,6 +326,7 @@ function ctxForget(): void {
         </section>
       </div>
     </Teleport>
+    </template>
   </div>
 </template>
 
@@ -563,5 +610,45 @@ function ctxForget(): void {
   margin: 0;
   width: min(420px, 90vw);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ===== 疑难解答入口（空状态居中） ===== */
+.troubleshooting-link {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+/* ===== 标题行 + 刷新按钮 ===== */
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.title-row h3 {
+  margin: 0;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  line-height: 1;
+}
+
+.refresh-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinning .refresh-icon {
+  animation: spin 1s linear;
 }
 </style>

@@ -67,7 +67,7 @@ export function useSegments() {
   }
 
   /** 新增一段对话（最新在前），并落盘。返回新段 id。 */
-  function addSegment(fromName: string, conversation: Conversation, read: boolean): string {
+  function addSegment(fromName: string, conversation: Conversation, read = false): string {
     const seg: ConversationSegment = {
       id: newId(),
       fromName,

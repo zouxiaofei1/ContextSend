@@ -143,6 +143,7 @@ export const useAppStore = defineStore('app', () => {
     setPermission: permissions.setPermission,
     // 设备
     devices: devices.devices,
+    refreshDevices: devices.refreshDevices,
     forgetDevice: devices.forgetDevice,
     // 配对
     incoming: pairing.incoming,

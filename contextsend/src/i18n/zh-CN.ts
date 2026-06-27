@@ -4,7 +4,7 @@ export default {
     subtitle: '局域网内分享本地 Chat AI 上下文',
   },
   sidebar: {
-    receive: '对话',
+    receive: '接收',
     devices: '设备',
     settings: '设置',
   },
@@ -67,6 +67,7 @@ export default {
   },
   device: {
     title: '附近的设备',
+    refresh: '刷新',
     online: '在线设备',
     offline: '离线设备',
     statusOnline: '在线',
@@ -108,6 +109,18 @@ export default {
       trusted: '已信任',
       sync: '自动同步',
     },
+    troubleshooting: '疑难解答',
+    troubleshootingTitle: '疑难解答',
+    troubleshootingLanTitle: '同一局域网',
+    troubleshootingLanDesc:
+      'ContextSend 通过局域网发现（mDNS）查找附近设备。请确保两台设备连接到同一个路由器或 Wi-Fi 网络，并且 IP 地址处于同一网段。',
+    troubleshootingApTitle: 'AP 隔离',
+    troubleshootingApDesc:
+      '部分路由器默认开启了 AP 隔离（客户端隔离）功能，会阻止同一 Wi-Fi 下的设备互相通信。请在路由器管理页面中关闭「AP 隔离」「Client Isolation」或类似选项。',
+    troubleshootingFirewallTitle: '防火墙',
+    troubleshootingFirewallDesc:
+      'Windows 防火墙或 macOS 防火墙可能阻止 ContextSend 的网络通信。请在系统防火墙设置中允许 ContextSend 通过，确保 UDP 端口（mDNS）和 TCP 端口未被拦截。',
+    troubleshootingBack: '返回设备列表',
   },
   settings: {
     title: '设置',

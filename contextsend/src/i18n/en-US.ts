@@ -4,7 +4,7 @@ export default {
     subtitle: 'Share local Chat AI context over LAN',
   },
   sidebar: {
-    receive: 'Context',
+    receive: 'Receive',
     devices: 'Devices',
     settings: 'Settings',
   },
@@ -68,6 +68,7 @@ export default {
   },
   device: {
     title: 'Devices',
+    refresh: 'Refresh',
     online: 'Online',
     offline: 'Offline',
     statusOnline: 'Online',
@@ -109,6 +110,18 @@ export default {
       trusted: 'Trusted',
       sync: 'Auto Sync',
     },
+    troubleshooting: 'Troubleshooting',
+    troubleshootingTitle: 'Troubleshooting',
+    troubleshootingLanTitle: 'Same LAN',
+    troubleshootingLanDesc:
+      'ContextSend uses LAN discovery (mDNS) to find nearby devices. Make sure both devices are connected to the same router or Wi-Fi network and are on the same subnet.',
+    troubleshootingApTitle: 'AP Isolation',
+    troubleshootingApDesc:
+      'Some routers enable AP/Client Isolation by default, which blocks communication between devices on the same Wi-Fi. Check your router settings and disable "AP Isolation", "Client Isolation", or similar options.',
+    troubleshootingFirewallTitle: 'Firewall',
+    troubleshootingFirewallDesc:
+      'Windows Firewall or macOS Firewall may block ContextSend network traffic. Go to your system firewall settings and allow ContextSend through. Make sure UDP (mDNS) and TCP ports are not blocked.',
+    troubleshootingBack: 'Back to device list',
   },
   settings: {
     title: 'Settings',

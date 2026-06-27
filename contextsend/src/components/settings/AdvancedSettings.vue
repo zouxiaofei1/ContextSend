@@ -8,7 +8,7 @@ import type { RetentionValue } from '../../constants'
 import SettingsSection from './SettingsSection.vue'
 import SettingRow from './SettingRow.vue'
 import SettingToggle from './SettingToggle.vue'
-import SettingSelect from './SettingSelect.vue'
+import SettingComboBox from './SettingComboBox.vue'
 import SettingNumber from './SettingNumber.vue'
 import ShortcutInput from './ShortcutInput.vue'
 
@@ -84,7 +84,7 @@ async function onShortcutChange(accelerator: string): Promise<void> {
 
     <!-- 对话保存期限 -->
     <SettingRow :label="t('settings.advanced.retention')">
-      <SettingSelect
+      <SettingComboBox
         :model-value="settings.conversationRetention"
         :options="retentionOptions"
         @update:model-value="settings.setConversationRetention($event as RetentionValue)"

@@ -11,7 +11,7 @@ import { validateName } from '../../utils/nameValidation'
 import SettingsSection from './SettingsSection.vue'
 import SettingRow from './SettingRow.vue'
 import SettingToggle from './SettingToggle.vue'
-import SettingSelect from './SettingSelect.vue'
+import SettingComboBox from './SettingComboBox.vue'
 
 const app = useAppStore()
 const toast = useToastStore()
@@ -88,7 +88,7 @@ const themeOptions = computed(() =>
         <span>{{ t('settings.theme.label') }}</span>
         <span class="muted theme-hint">{{ t('settings.theme.followSystem') }}</span>
       </template>
-      <SettingSelect
+      <SettingComboBox
         :model-value="settings.themeId"
         :options="themeOptions"
         min-width="160px"

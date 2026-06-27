@@ -12,7 +12,7 @@ import { ADAPTER_JAN, ADAPTER_CHATBOX } from '../constants'
 import { exportConversation, type ExportFormat } from '../utils/conversationExport'
 import MarkdownContent from './MarkdownContent.vue'
 
-const props = defineProps<{ segment: ConversationSegment; expanded: boolean; unread: boolean }>()
+const props = defineProps<{ segment: ConversationSegment; expanded: boolean }>()
 defineEmits<{ toggle: [] }>()
 
 const app = useAppStore()
@@ -167,7 +167,6 @@ onBeforeUnmount(() => {
 <template>
   <li
     class="seg-item"
-    :class="{ 'seg-item--unread': unread }"
     @contextmenu.prevent="openContextMenu"
   >
     <div class="seg-head" @click="$emit('toggle')">
@@ -177,7 +176,6 @@ onBeforeUnmount(() => {
         {{ segment.fromName }} · {{ fmtTime(segment.receivedAt) }} ·
         {{ t('receive.count', { count: segment.conversation.messages.length }) }}
       </span>
-      <span v-if="unread" class="dot-new" />
     </div>
 
     <div v-if="expanded" class="seg-body">
@@ -285,14 +283,6 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   max-width: 40%;
   flex-shrink: 1;
-}
-
-.dot-new {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
 }
 
 .seg-body {
